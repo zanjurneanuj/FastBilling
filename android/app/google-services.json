@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "611789051032",
+    "project_id": "zanvoy-invoices",
+    "storage_bucket": "zanvoy-invoices.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611789051032:android:d512ea08c83cdc945caced",
+        "android_client_info": {
+          "package_name": "com.zanjurnetech.fast_billing"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBu2r-TViT87h-rCNsBqvN2P03oHKXRuak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
