@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # fast_billing
 
 A new Flutter project.
@@ -15,3 +16,6 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# FastBilling
+>>>>>>> 555901f829f55597ef7076955449caaf92cf8556
