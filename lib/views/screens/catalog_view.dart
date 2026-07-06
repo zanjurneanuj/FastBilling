@@ -16,6 +16,7 @@ class CatalogView extends StatelessWidget {
   }
 }
 
+
 class _CatalogBody extends StatelessWidget {
   const _CatalogBody();
 
