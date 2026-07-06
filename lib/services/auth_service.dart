@@ -1,5 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
+import '../models/UserModel.dart';
+import 'local_db_service.dart';
 
 class AuthService {
   AuthService._();
@@ -14,22 +18,28 @@ class AuthService {
   // ── Email & Password ──────────────────────────────────────────────────────
 
   static Future<UserCredential> signInWithEmail(
-    String email,
-    String password,
-  ) =>
-      _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      String email,
+      String password,
+      ) async {
+    final cred = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    await _persist(cred.user);
+    return cred;
+  }
 
   static Future<UserCredential> registerWithEmail(
-    String email,
-    String password,
-  ) =>
-      _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      String email,
+      String password,
+      ) async {
+    final cred = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    await _persist(cred.user);
+    return cred;
+  }
 
   static Future<void> sendPasswordResetEmail(String email) =>
       _auth.sendPasswordResetEmail(email: email);
@@ -38,24 +48,20 @@ class AuthService {
 
   static Future<UserCredential?> signInWithGoogle() async {
     try {
-      // Step 1: Trigger Google sign-in picker
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null; // cancelled
 
-      // User cancelled the picker
-      if (googleUser == null) return null;
-
-      // Step 2: Get auth tokens
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      await googleUser.authentication;
 
-      // Step 3: Create Firebase credential
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Step 4: Sign in to Firebase
-      return await _auth.signInWithCredential(credential);
+      final cred = await _auth.signInWithCredential(credential);
+      await _persist(cred.user);
+      return cred;
     } catch (e) {
       rethrow;
     }
@@ -66,5 +72,27 @@ class AuthService {
   static Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
+    // Keep the local row so you can show "recent accounts".
+    // To wipe it instead: await LocalDbService.instance.clearUsers();
+  }
+
+  // ── Local persistence ─────────────────────────────────────────────────────
+
+  static Future<void> _persist(User? user) async {
+    if (user == null) {
+      debugPrint('[Auth] _persist: user is NULL — nothing to save');
+      return;
+    }
+    try {
+      final model = UserModel.fromFirebase(user);
+      debugPrint('[Auth] saving ${model.uid} / ${model.email}');
+      await LocalDbService.instance.saveUser(model);
+      final u = await LocalDbService.instance.getCurrentUser();
+      debugPrint('[Auth] persisted user on launch: ${u?.email ?? "NONE"}');
+      final check = await LocalDbService.instance.getUser(user.uid);
+      debugPrint('[Auth] read-back: ${check?.email ?? "NULL — insert did not land"}');
+    } catch (e, st) {
+      debugPrint('[Auth] LOCAL SAVE FAILED: $e\n$st');
+    }
   }
 }

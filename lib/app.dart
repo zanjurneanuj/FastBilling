@@ -1,3 +1,6 @@
+import 'package:fast_billing/services/auth_service.dart';
+import 'package:fast_billing/utils/go_router_refresh_stream.dart';
+import 'package:fast_billing/views/screens/ProfileService.dart';
 import 'package:fast_billing/views/screens/register_view.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -144,6 +147,20 @@ class ZanvoyApp extends StatelessWidget {
 
 final GoRouter _router = GoRouter(
   initialLocation: '/login',
+  refreshListenable: Listenable.merge([
+    GoRouterRefreshStream(AuthService.authStateChanges),
+    ProfileService.changed,
+  ]),  redirect: (context, state) {
+    final loggedIn   = AuthService.isLoggedIn;
+    final hasProfile = ProfileService.hasProfile;
+    final loc = state.matchedLocation;
+    final onAuth = loc == '/login' || loc == '/register';
+
+    if (!loggedIn) return onAuth ? null : '/login';
+    if (!hasProfile) return loc == '/onboarding' ? null : '/onboarding';
+    if (onAuth || loc == '/onboarding') return '/home';
+    return null;
+  },
   routes: [
     GoRoute(path: '/login',           builder: (c, s) => const LoginView()),
     GoRoute(path: '/register', builder: (c, s) => const RegisterView()), 

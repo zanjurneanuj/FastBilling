@@ -1,24 +1,54 @@
-// Data model class
-class SettingsViewmodel {
-  final String id;
-  
-  SettingsViewmodel({
-    required this.id,
-  });
-  
-  factory SettingsViewmodel.empty() {
-    return SettingsViewmodel(id: '');
+import 'package:flutter/material.dart';
+
+import '../services/auth_service.dart';
+import '../views/screens/ProfileService.dart';
+
+class SettingsViewModel extends ChangeNotifier {
+  // ── Read-only getters from existing services ──────────────────────────────
+  // Settings doesn't own data — it reads ProfileService + ThemeProvider.
+  // Add state here only when a setting needs local persistence.
+
+  String get businessName =>
+      ProfileService.cached?.name ??
+          AuthService.currentUser?.displayName ??
+          'You';
+
+  String get subtitle {
+    final p = ProfileService.cached;
+    if (p == null) return '';
+    if (p.gstNumber != null && p.gstNumber!.isNotEmpty) {
+      return 'GST: ${p.gstNumber}';
+    }
+    return p.address ?? '';
   }
-  
-  factory SettingsViewmodel.fromJson(Map<String, dynamic> json) {
-    return SettingsViewmodel(
-      id: json['id'] as String? ?? '',
-    );
+
+  String get currency => ProfileService.cached?.currency ?? 'INR';
+
+  String get initials {
+    final parts = businessName.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return businessName.isNotEmpty ? businessName[0].toUpperCase() : '?';
   }
-  
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-    };
+
+  // ── Toggle state ──────────────────────────────────────────────────────────
+  bool cloudBackup = true;
+  bool appLock     = false;
+
+  void toggleCloudBackup(bool v) {
+    cloudBackup = v;
+    notifyListeners();
+    // TODO: persist to local prefs
+  }
+
+  void toggleAppLock(bool v) {
+    appLock = v;
+    notifyListeners();
+    // TODO: persist to local prefs
+  }
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
+  Future<void> signOut() async {
+    await AuthService.signOut();
+    ProfileService.clear();
   }
 }

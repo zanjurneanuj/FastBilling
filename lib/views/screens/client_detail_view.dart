@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ClientDetailView extends StatelessWidget {
+  class ClientDetailView extends StatelessWidget {
   const ClientDetailView({super.key, required String clientId});
 
   @override

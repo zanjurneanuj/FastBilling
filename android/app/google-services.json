@@ -12,7 +12,20 @@
           "package_name": "com.zanjurnetech.fast_billing"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "611789051032-39vin7iquse1lpie227j7ct6ho92pldm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zanjurnetech.fast_billing",
+            "certificate_hash": "ca79568d0da95609aff5e06f9326ea90d7f391df"
+          }
+        },
+        {
+          "client_id": "611789051032-g13ec9d70sb0osofg0so5rlugpgolq3o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBu2r-TViT87h-rCNsBqvN2P03oHKXRuak"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "611789051032-g13ec9d70sb0osofg0so5rlugpgolq3o.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "611789051032-6v1fsfhmnuha6p45hndnt0iiiqqmkrd0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.zanjurnetech.fastBilling"
+              }
+            }
+          ]
         }
       }
     }
