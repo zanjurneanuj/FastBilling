@@ -1,5 +1,5 @@
 import 'package:fast_billing/services/auth_service.dart';
-import 'package:fast_billing/views/screens/ProfileService.dart';
+import 'package:fast_billing/services/ProfileService.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';

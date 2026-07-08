@@ -1,6 +1,6 @@
 import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/utils/go_router_refresh_stream.dart';
-import 'package:fast_billing/views/screens/ProfileService.dart';
+import 'package:fast_billing/services/ProfileService.dart';
 import 'package:fast_billing/views/screens/register_view.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

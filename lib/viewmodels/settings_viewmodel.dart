@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
-import '../views/screens/ProfileService.dart';
+import '../services/ProfileService.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   // ── Read-only getters from existing services ──────────────────────────────

@@ -4,10 +4,14 @@ import 'package:provider/provider.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../services/PdfTemplateService.dart';
+import '../../services/ProfileService.dart';
 import '../../services/auth_service.dart';
+import '../../models/PdfTemplate.dart';
 import '../../utils/app_colors.dart';
 import '../../viewmodels/settings_viewmodel.dart';
-import '../../views/screens/ProfileService.dart';
+import 'PdfTemplateCard.dart';
+import 'pdf_templates_page.dart';
 
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
@@ -23,6 +27,24 @@ class _SettingsViewState extends State<SettingsView>
 
   bool _cloudBackup = true;
   bool _appLock     = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild the "PDF template" tile whenever the selection changes,
+    // whether from this screen's dialog or the full browse page.
+    PdfTemplateService.changed.addListener(_onPdfTemplateChanged);
+  }
+
+  @override
+  void dispose() {
+    PdfTemplateService.changed.removeListener(_onPdfTemplateChanged);
+    super.dispose();
+  }
+
+  void _onPdfTemplateChanged() {
+    if (mounted) setState(() {});
+  }
 
   String get _businessName =>
       ProfileService.cached?.name ?? AuthService.currentUser?.displayName ?? 'You';
@@ -71,7 +93,7 @@ class _SettingsViewState extends State<SettingsView>
                 initials:    _initials,
                 name:        _businessName,
                 sub:         _businessSub,
-                onEdit:      () => context.go('/onboarding'),
+                onEdit:      () => _showEditProfileDialog(context),
               ),
               const SizedBox(height: 24),
 
@@ -90,9 +112,9 @@ class _SettingsViewState extends State<SettingsView>
                 _SettingsTile(
                   icon: Icons.description_outlined,
                   label: 'PDF template',
-                  trailingText: 'Modern',
+                  trailingText: PdfTemplateService.selected.name,
                   showChevron: true,
-                  onTap: () {},
+                  onTap: () => _showPdfTemplateDialog(context),
                 ),
                 _Divider(),
                 _SettingsTile(
@@ -110,17 +132,17 @@ class _SettingsViewState extends State<SettingsView>
               const SizedBox(height: 8),
               _SettingsCard(children: [
                 _SettingsTile(
-                  icon: Icons.cloud_sync_outlined,
-                  label: 'Cloud backup',
-                  subLabel: _cloudBackup ? 'Last synced 2h ago' : 'Off',
-                  subLabelColor: _cloudBackup
-                      ? AppColors.primary
-                      : AppColors.textSecondary(context),
-                  trailing: Switch(
-                    value: vm.cloudBackup,
-                    onChanged: (v) => context.read<SettingsViewModel>().toggleCloudBackup(v),
-                    activeColor: AppColors.primary,
-                  )
+                    icon: Icons.cloud_sync_outlined,
+                    label: 'Cloud backup',
+                    subLabel: _cloudBackup ? 'Last synced 2h ago' : 'Off',
+                    subLabelColor: _cloudBackup
+                        ? AppColors.primary
+                        : AppColors.textSecondary(context),
+                    trailing: Switch(
+                      value: vm.cloudBackup,
+                      onChanged: (v) => context.read<SettingsViewModel>().toggleCloudBackup(v),
+                      activeColor: AppColors.primary,
+                    )
                 ),
                 _Divider(),
                 _SettingsTile(
@@ -132,13 +154,13 @@ class _SettingsViewState extends State<SettingsView>
                 ),
                 _Divider(),
                 _SettingsTile(
-                  icon: Icons.lock_outline_rounded,
-                  label: 'App lock',
-                  trailing: Switch(
-                    value: vm.appLock,
-                    onChanged: (v) => context.read<SettingsViewModel>().toggleAppLock(v),
-                    activeColor: AppColors.primary,
-                  )
+                    icon: Icons.lock_outline_rounded,
+                    label: 'App lock',
+                    trailing: Switch(
+                      value: vm.appLock,
+                      onChanged: (v) => context.read<SettingsViewModel>().toggleAppLock(v),
+                      activeColor: AppColors.primary,
+                    )
                 ),
                 _Divider(),
                 _SettingsTile(
@@ -291,6 +313,111 @@ class _SettingsViewState extends State<SettingsView>
     );
   }
 
+  void _showPdfTemplateDialog(BuildContext context) {
+    String selectedId = PdfTemplateService.selected.id;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface(context),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            24, 16, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SheetHandle(),
+              const SizedBox(height: 16),
+              Text('Choose PDF template',
+                  style: TextStyle(
+                      color: AppColors.textPrimary(sheetContext),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 19)),
+              const SizedBox(height: 4),
+              Text('Select a layout for all your invoices',
+                  style: TextStyle(
+                      color: AppColors.textSecondary(sheetContext),
+                      fontSize: 13)),
+              const SizedBox(height: 16),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: PdfTemplateCatalog.quickPick.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.95,
+                ),
+                itemBuilder: (_, i) {
+                  final t = PdfTemplateCatalog.quickPick[i];
+                  return PdfTemplateCard(
+                    template: t,
+                    isSelected: t.id == selectedId,
+                    onTap: () => setSheetState(() => selectedId = t.id),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PdfTemplatesPage()),
+                    );
+                  },
+                  child: const Text('See more templates',
+                      style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    await PdfTemplateService.select(
+                        PdfTemplateCatalog.byId(selectedId));
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                  child: const Text('Apply template',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _EditProfileDialog(
+        initialName:      ProfileService.cached?.name ?? '',
+        initialGst:       ProfileService.cached?.gstNumber ?? '',
+        initialAddress:   ProfileService.cached?.address ?? '',
+        onSaved: () => setState(() {}), // refresh header once saved
+      ),
+    );
+  }
+
   void _confirmSignOut(BuildContext context) {
     showDialog(
       context: context,
@@ -388,6 +515,145 @@ class _ProfileCard extends StatelessWidget {
               color: AppColors.textSecondary(context), size: 20),
         ),
       ]),
+    );
+  }
+}
+
+// ─── Edit Profile Dialog ──────────────────────────────────────────────────────
+
+class _EditProfileDialog extends StatefulWidget {
+  const _EditProfileDialog({
+    required this.initialName,
+    required this.initialGst,
+    required this.initialAddress,
+    required this.onSaved,
+  });
+
+  final String initialName;
+  final String initialGst;
+  final String initialAddress;
+  final VoidCallback onSaved;
+
+  @override
+  State<_EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<_EditProfileDialog> {
+  late final _nameCtrl    = TextEditingController(text: widget.initialName);
+  late final _gstCtrl     = TextEditingController(text: widget.initialGst);
+  late final _addressCtrl = TextEditingController(text: widget.initialAddress);
+
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _gstCtrl.dispose();
+    _addressCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _saving = true;
+      _error  = null;
+    });
+
+    try {
+      // ProfileService.save() rewrites the whole profile, so we carry over
+      // fields this dialog doesn't touch (currency, logo) from the cache.
+      await ProfileService.save(
+        name:      _nameCtrl.text.trim(),
+        address:   _addressCtrl.text.trim(),
+        gstNumber: _gstCtrl.text.trim().isEmpty ? null : _gstCtrl.text.trim(),
+        currency:  ProfileService.cached?.currency ?? 'INR',
+      );
+
+      if (!mounted) return;
+      widget.onSaved();
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => _error = 'Could not save changes. Please try again.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surface(context),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text('Edit profile',
+          style: TextStyle(
+              color: AppColors.textPrimary(context),
+              fontWeight: FontWeight.w700)),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _nameCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'Business name',
+                ),
+                textCapitalization: TextCapitalization.words,
+                validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _gstCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'GST number (optional)',
+                ),
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _addressCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'Address',
+                ),
+                maxLines: 2,
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!,
+                    style: const TextStyle(color: AppColors.error, fontSize: 12)),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: Text('Cancel',
+              style: TextStyle(color: AppColors.textSecondary(context))),
+        ),
+        TextButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+              : Text('Save',
+              style: TextStyle(
+                  color: AppColors.primary, fontWeight: FontWeight.w600)),
+        ),
+      ],
     );
   }
 }

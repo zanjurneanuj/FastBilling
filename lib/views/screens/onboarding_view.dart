@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../utils/app_colors.dart';
-import 'ProfileService.dart';
+import '../../services/ProfileService.dart';
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});

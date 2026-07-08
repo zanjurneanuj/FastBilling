@@ -4,9 +4,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../models/BusinessProfile.dart';
-import '../../services/auth_service.dart';
-import '../../services/local_db_service.dart';
+import '../models/BusinessProfile.dart';
+import 'auth_service.dart';
+import 'local_db_service.dart';
 
 class ProfileService {
   ProfileService._();

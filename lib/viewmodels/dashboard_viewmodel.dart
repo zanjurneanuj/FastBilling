@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../services/ProfileService.dart';
+import '../services/auth_service.dart';
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 class DashboardStats {
@@ -45,17 +48,29 @@ class RecentInvoice {
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
 class DashboardViewModel extends ChangeNotifier {
+  DashboardViewModel() {
+    // ProfileService.changed fires whenever the profile is saved/edited
+    // (e.g. from the Settings edit dialog) or cleared on sign-out.
+    // Listening here keeps the dashboard's business name live without
+    // needing a manual refresh.
+    ProfileService.changed.addListener(_onProfileChanged);
+  }
+
   bool _isLoading = false;
   String _errorMsg = '';
   DashboardStats _stats = const DashboardStats();
   List<RecentInvoice> _recentInvoices = [];
-  final String _businessName = 'Aarav Sharma'; // TODO: load from Hive business box
 
   bool                get isLoading      => _isLoading;
   String              get errorMsg       => _errorMsg;
   DashboardStats      get stats          => _stats;
   List<RecentInvoice> get recentInvoices => _recentInvoices;
-  String              get businessName   => _businessName;
+
+  /// Always reads the live cached profile — never goes stale after an edit.
+  String get businessName =>
+      ProfileService.cached?.name ??
+          AuthService.currentUser?.displayName ??
+          'You';
 
   String get greeting {
     final h = DateTime.now().hour;
@@ -63,6 +78,8 @@ class DashboardViewModel extends ChangeNotifier {
     if (h < 17) return 'Good afternoon';
     return 'Good evening';
   }
+
+  void _onProfileChanged() => notifyListeners();
 
   Future<void> loadDashboard() async {
     _isLoading = true;
@@ -130,4 +147,10 @@ class DashboardViewModel extends ChangeNotifier {
   }
 
   Future<void> refresh() => loadDashboard();
+
+  @override
+  void dispose() {
+    ProfileService.changed.removeListener(_onProfileChanged);
+    super.dispose();
+  }
 }
