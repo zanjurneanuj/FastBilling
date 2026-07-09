@@ -2,13 +2,27 @@ import 'package:flutter/material.dart';
 
 import '../models/InvoiceDetail.dart';
 import '../models/InvoiceLineItem.dart';
+import '../models/PdfTemplate.dart';
+import '../services/PdfTemplateService.dart';
 
 
 
 class InvoicePreviewViewModel extends ChangeNotifier {
   bool           isLoading = false;
   InvoiceDetail? invoice;
+  InvoicePreviewViewModel() {
+    PdfTemplateService.changed.addListener(_onTemplateChanged);
+  }
+  void _onTemplateChanged() {
+    debugPrint('[PreviewVM] template changed → ${PdfTemplateService.selected.id}, notifying');
+    notifyListeners();
+  }
 
+  @override
+  void dispose() {
+    PdfTemplateService.changed.removeListener(_onTemplateChanged);
+    super.dispose();
+  }
   Future<void> load(String id) async {
     isLoading = true;
     notifyListeners();
@@ -37,6 +51,8 @@ class InvoicePreviewViewModel extends ChangeNotifier {
     isLoading = false;
     notifyListeners();
   }
+  /// Exposes the currently active template so the view can read it.
+  PdfTemplate get activeTemplate => PdfTemplateService.selected;
 
   void togglePaidStatus() {
     if (invoice == null) return;

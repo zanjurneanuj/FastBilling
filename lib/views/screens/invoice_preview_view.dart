@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/PdfTemplate.dart';
+import '../../services/PdfTemplateService.dart';
 import '../../utils/app_colors.dart';
 import '../../viewmodels/InvoicePreviewViewModel.dart';
 
@@ -28,7 +30,6 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
       builder: (context, vm, _) {
         return Scaffold(
           backgroundColor: const Color(0xFF1E1E2E),
-          // ── AppBar ──────────────────────────────────────────────────────
           appBar: AppBar(
             backgroundColor: const Color(0xFF1E1E2E),
             elevation: 0,
@@ -52,20 +53,16 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
               ),
             ],
           ),
-
           body: vm.isLoading
               ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary))
               : Column(children: [
-            // ── Invoice card ─────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 child: _InvoiceCard(vm: vm),
               ),
             ),
-
-            // ── Bottom action bar ────────────────────────────────────
             _BottomBar(vm: vm),
           ]),
         );
@@ -84,7 +81,8 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Center(
             child: Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
                   color: AppColors.border(context),
                   borderRadius: BorderRadius.circular(2)),
@@ -97,6 +95,14 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             onTap: () {
               Navigator.pop(context);
               context.go('/invoices/create');
+            },
+          ),
+          _SheetTile(
+            icon: Icons.style_outlined,
+            label: 'Change template',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/settings/pdf-template');
             },
           ),
           _SheetTile(
@@ -134,8 +140,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('Cancel',
-                style:
-                TextStyle(color: AppColors.textSecondary(context))),
+                style: TextStyle(color: AppColors.textSecondary(context))),
           ),
           TextButton(
             onPressed: () {
@@ -144,8 +149,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             },
             child: const Text('Delete',
                 style: TextStyle(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w600)),
+                    color: AppColors.error, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -156,13 +160,26 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
 // ─── Invoice Card ─────────────────────────────────────────────────────────────
 
 class _InvoiceCard extends StatelessWidget {
-   _InvoiceCard({required this.vm});
+  const _InvoiceCard({required this.vm});
   final InvoicePreviewViewModel vm;
-  late final inv = vm.invoice!; // safe — only rendered when !isLoading
 
   @override
   Widget build(BuildContext context) {
     final inv = vm.invoice!;
+
+    // ── Active template — every color below comes from here ──────────────
+    final t           = PdfTemplateService.selected;
+    final headerBg    = t.headerColor;
+    final accent      = t.accentColor;
+    final isDark      = t.darkHeader;
+    final onHeader    = isDark ? Colors.white         : const Color(0xFF1A1A2E);
+    final subOnHeader = isDark ? Colors.white70       : const Color(0xFF888888);
+    // Card body is always white (PDF paper feel); only header band changes
+    const bodyText    = Color(0xFF1A1A2E);
+    const mutedText   = Color(0xFF888888);
+    const dividerClr  = Color(0xFFEEEEEE);
+    const rowBg       = Color(0xFFF8F8FC);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -175,33 +192,39 @@ class _InvoiceCard extends StatelessWidget {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // ── Header ────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+
+        // ── Header band — uses template headerColor ────────────────────
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: headerBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Logo / icon
+              // Logo / icon — uses template accentColor
               Container(
-                width: 44, height: 44,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: accent,
                     borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.bolt_rounded,
-                    color: Colors.white, size: 24),
+                child: Icon(Icons.bolt_rounded,
+                    color: isDark ? Colors.white : Colors.white, size: 24),
               ),
               const Spacer(),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                const Text('INVOICE',
+                Text('INVOICE',
                     style: TextStyle(
-                        color: Color(0xFF1A1A2E),
+                        color: onHeader,
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.5)),
                 const SizedBox(height: 4),
                 Text(inv.invoiceNumber,
-                    style: const TextStyle(
-                        color: Color(0xFF888888), fontSize: 12)),
+                    style: TextStyle(color: subOnHeader, fontSize: 12)),
                 const SizedBox(height: 6),
                 _StatusBadge(status: inv.status),
               ]),
@@ -212,26 +235,26 @@ class _InvoiceCard extends StatelessWidget {
         // ── Sender info ───────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(inv.senderName,
                 style: const TextStyle(
-                    color: Color(0xFF1A1A2E),
+                    color: bodyText,
                     fontSize: 15,
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
+            // Sender address uses accent color
             Text(inv.senderAddress,
-                style: const TextStyle(
-                    color: AppColors.primary, fontSize: 12)),
+                style: TextStyle(color: accent, fontSize: 12)),
             Text('GSTIN — ${inv.senderGst ?? 'unregistered'}',
-                style: const TextStyle(
-                    color: Color(0xFF888888), fontSize: 12)),
+                style: const TextStyle(color: mutedText, fontSize: 12)),
           ]),
         ),
 
         // Divider
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Divider(color: Color(0xFFEEEEEE), height: 1),
+          child: Divider(color: dividerClr, height: 1),
         ),
 
         // ── Bill to + Issued ──────────────────────────────────────────
@@ -246,33 +269,33 @@ class _InvoiceCard extends StatelessWidget {
                     children: [
                       const Text('BILL TO',
                           style: TextStyle(
-                              color: Color(0xFF888888),
+                              color: mutedText,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.8)),
                       const SizedBox(height: 4),
                       Text(inv.clientName,
                           style: const TextStyle(
-                              color: Color(0xFF1A1A2E),
+                              color: bodyText,
                               fontSize: 14,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 2),
                       Text(inv.clientEmail,
                           style: const TextStyle(
-                              color: Color(0xFF888888), fontSize: 12)),
+                              color: mutedText, fontSize: 12)),
                     ]),
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 const Text('ISSUED',
                     style: TextStyle(
-                        color: Color(0xFF888888),
+                        color: mutedText,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.8)),
                 const SizedBox(height: 4),
                 Text(inv.issuedDate,
                     style: const TextStyle(
-                        color: Color(0xFF1A1A2E),
+                        color: bodyText,
                         fontSize: 13,
                         fontWeight: FontWeight.w600)),
               ]),
@@ -282,56 +305,55 @@ class _InvoiceCard extends StatelessWidget {
 
         const SizedBox(height: 20),
 
-        // ── Line items table header ────────────────────────────────────
+        // ── Line items table header — uses template accent tint ────────
         Container(
-          color: const Color(0xFFF8F8FC),
+          color: headerBg.withOpacity(0.4),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Row(children: [
             const Expanded(
               child: Text('DESCRIPTION',
                   style: TextStyle(
-                      color: Color(0xFF888888),
+                      color: mutedText,
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.8)),
             ),
             const Text('QTY',
                 style: TextStyle(
-                    color: Color(0xFF888888),
+                    color: mutedText,
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.8)),
             const SizedBox(width: 32),
             const Text('AMOUNT',
                 style: TextStyle(
-                    color: Color(0xFF888888),
+                    color: mutedText,
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.8)),
           ]),
         ),
 
-        // ── Line items ────────────────────────────────────────────────
+        // ── Line items — item name uses accent color ───────────────────
         ...inv.items.map((item) => Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: Row(children: [
             Expanded(
               child: Text(item.name,
-                  style: const TextStyle(
-                      color: AppColors.primary,
+                  style: TextStyle(
+                      color: accent,
                       fontSize: 13,
                       fontWeight: FontWeight.w500)),
             ),
             Text('${item.qty.toStringAsFixed(0)}',
-                style: const TextStyle(
-                    color: Color(0xFF1A1A2E), fontSize: 13)),
+                style: const TextStyle(color: bodyText, fontSize: 13)),
             const SizedBox(width: 16),
             SizedBox(
               width: 70,
               child: Text('₹${_fmt(item.total)}',
                   textAlign: TextAlign.right,
                   style: const TextStyle(
-                      color: Color(0xFF1A1A2E),
+                      color: bodyText,
                       fontSize: 13,
                       fontWeight: FontWeight.w600)),
             ),
@@ -341,35 +363,44 @@ class _InvoiceCard extends StatelessWidget {
         const SizedBox(height: 16),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Divider(color: Color(0xFFEEEEEE), height: 1),
+          child: Divider(color: dividerClr, height: 1),
         ),
         const SizedBox(height: 12),
 
-        // ── Subtotals ──────────────────────────────────────────────────
+        // ── Subtotals — grand total uses accent color ──────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(children: [
             _SummaryRow(
               label: 'Subtotal',
               value: '₹${_fmt(inv.subtotal)}',
-              labelColor: const Color(0xFF888888),
-              valueColor: const Color(0xFF888888),
+              labelColor: mutedText,
+              valueColor: mutedText,
             ),
             const SizedBox(height: 4),
             _SummaryRow(
               label: 'GST ${inv.gstPercent.toStringAsFixed(0)}%',
               value: '₹${_fmt(inv.gstAmt)}',
-              labelColor: const Color(0xFF888888),
-              valueColor: const Color(0xFF888888),
+              labelColor: mutedText,
+              valueColor: mutedText,
             ),
+            if (inv.discountAmt > 0) ...[
+              const SizedBox(height: 4),
+              _SummaryRow(
+                label: 'Discount',
+                value: '−₹${_fmt(inv.discountAmt)}',
+                labelColor: mutedText,
+                valueColor: AppColors.success,
+              ),
+            ],
             const SizedBox(height: 10),
-            const Divider(color: Color(0xFFEEEEEE), height: 1),
+            const Divider(color: dividerClr, height: 1),
             const SizedBox(height: 10),
             _SummaryRow(
               label: 'Total',
               value: '₹${_fmtFull(inv.grandTotal)}',
-              labelColor: const Color(0xFF1A1A2E),
-              valueColor: AppColors.primary,
+              labelColor: bodyText,
+              valueColor: accent,   // ← accent drives the grand total color
               bold: true,
               largeValue: true,
             ),
@@ -385,12 +416,12 @@ class _InvoiceCard extends StatelessWidget {
             margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8F8FC),
+              color: headerBg.withOpacity(0.3),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(inv.note!,
                 style: const TextStyle(
-                    color: Color(0xFF888888),
+                    color: mutedText,
                     fontSize: 11,
                     fontStyle: FontStyle.italic)),
           ),
@@ -456,7 +487,9 @@ class _StatusBadge extends StatelessWidget {
       BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
       child: Text(status.toUpperCase(),
           style: TextStyle(
-              color: fg, fontSize: 10, fontWeight: FontWeight.w700,
+              color: fg,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.5)),
     );
   }
@@ -475,10 +508,10 @@ class _SummaryRow extends StatelessWidget {
   });
   final String label;
   final String value;
-  final Color  labelColor;
-  final Color  valueColor;
-  final bool   bold;
-  final bool   largeValue;
+  final Color labelColor;
+  final Color valueColor;
+  final bool bold;
+  final bool largeValue;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -515,22 +548,17 @@ class _BottomBar extends StatelessWidget {
         border: Border(top: BorderSide(color: Color(0xFF2E2E3E))),
       ),
       child: Row(children: [
-        // PDF
         _ActionBtn(
           icon: Icons.download_outlined,
           label: 'PDF',
           onTap: () {},
         ),
         const SizedBox(width: 10),
-
-        // Mark paid / unpaid
         _ActionBtn(
           icon: vm.invoice?.status.toLowerCase() == 'paid'
               ? Icons.remove_circle_outline_rounded
               : Icons.check_circle_outline_rounded,
-          label: vm.invoice?.status.toLowerCase() == 'paid'
-              ? 'Unpaid'
-              : 'Paid',
+          label: vm.invoice?.status.toLowerCase() == 'paid' ? 'Unpaid' : 'Paid',
           iconColor: vm.invoice?.status.toLowerCase() == 'paid'
               ? AppColors.error
               : AppColors.success,
@@ -540,8 +568,6 @@ class _BottomBar extends StatelessWidget {
           onTap: () => vm.togglePaidStatus(),
         ),
         const SizedBox(width: 10),
-
-        // Share
         Expanded(
           flex: 2,
           child: ElevatedButton.icon(
@@ -552,8 +578,7 @@ class _BottomBar extends StatelessWidget {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
             ),
-            icon: const Icon(Icons.share_rounded,
-                color: Colors.white, size: 18),
+            icon: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
             label: const Text('Share',
                 style: TextStyle(
                     color: Colors.white,
@@ -574,17 +599,18 @@ class _ActionBtn extends StatelessWidget {
     this.iconColor,
     this.labelColor,
   });
-  final IconData     icon;
-  final String       label;
+  final IconData icon;
+  final String label;
   final VoidCallback onTap;
-  final Color?       iconColor;
-  final Color?       labelColor;
+  final Color? iconColor;
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 70, height: 52,
+      width: 70,
+      height: 52,
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A3E),
         borderRadius: BorderRadius.circular(14),
@@ -592,8 +618,7 @@ class _ActionBtn extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon,
-              color: iconColor ?? Colors.white70, size: 20),
+          Icon(icon, color: iconColor ?? Colors.white70, size: 20),
           const SizedBox(height: 3),
           Text(label,
               style: TextStyle(
@@ -615,10 +640,10 @@ class _SheetTile extends StatelessWidget {
     required this.onTap,
     this.color,
   });
-  final IconData     icon;
-  final String       label;
+  final IconData icon;
+  final String label;
   final VoidCallback onTap;
-  final Color?       color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => ListTile(

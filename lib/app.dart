@@ -1,6 +1,7 @@
 import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/utils/go_router_refresh_stream.dart';
 import 'package:fast_billing/services/ProfileService.dart';
+import 'package:fast_billing/views/screens/PdfTemplateView.dart';
 import 'package:fast_billing/views/screens/register_view.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -179,6 +180,15 @@ final GoRouter _router = GoRouter(
     ),
     GoRoute(path: '/catalog',         builder: (c, s) => const CatalogView()),
     GoRoute(path: '/reports',         builder: (c, s) => const ReportsView()),
-    GoRoute(path: '/settings',        builder: (c, s) => const SettingsView()),
+    GoRoute(
+      path: '/settings',
+      builder: (c, s) => const SettingsView(),
+      routes: [
+        GoRoute(
+          path: 'pdf-template',              // no leading slash — it becomes /settings/pdf-template
+          builder: (c, s) => const PdfTemplateView(),
+        ),
+      ],
+    ),
   ],
 );
