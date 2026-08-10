@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../utils/app_colors.dart';
 import '../../services/ProfileService.dart';
+import '../../services/auth_service.dart';
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
@@ -21,8 +22,23 @@ class _OnboardingViewState extends State<OnboardingView> {
   File?  _logo;
   bool   _saving = false;
 
+  // Collapsed by default — GST/address are optional and shouldn't slow
+  // down the very first screen a new user sees.
+  bool _showTaxDetails = false;
+
   static const _currencies = ['INR', 'USD', 'EUR', 'GBP', 'AED'];
   static const _purple = Color(0xFF5B4FCF);
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill from the auth account (e.g. Google sign-in) so returning
+    // users don't have to retype something we already know.
+    final displayName = AuthService.currentUser?.displayName;
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      _name.text = displayName;
+    }
+  }
 
   @override
   void dispose() {
@@ -93,57 +109,55 @@ class _OnboardingViewState extends State<OnboardingView> {
                     ),
                     const SizedBox(height: 18),
 
-                    // Address
-                    _Label('Address'),
+                    // Currency (kept up front — every invoice needs this,
+                    // and it's a single tap so it doesn't add real friction)
+                    _Label('Currency'),
                     const SizedBox(height: 6),
-                    TextFormField(
-                      controller: _address,
-                      maxLines: 2,
+                    DropdownButtonFormField<String>(
+                      value: _currency,
                       decoration: _inputDec(hint: ''),
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+                      items: _currencies
+                          .map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Text('₹  $c',
+                              style: const TextStyle(fontSize: 14))))
+                          .toList(),
+                      onChanged: (v) => setState(() => _currency = v!),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
 
-                    // GST + Currency row
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _Label('GST number · optional'),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                controller: _gst,
-                                decoration: _inputDec(hint: 'Skip if unregistered'),
-                              ),
-                            ],
+                    // ── Optional: tax & address ─────────────────────────────
+                    // Most freelancers/small businesses don't have a GST
+                    // number ready at signup, so this stays collapsed and
+                    // out of the way unless the user opts in.
+                    _ExpandableSection(
+                      expanded: _showTaxDetails,
+                      onToggle: () =>
+                          setState(() => _showTaxDetails = !_showTaxDetails),
+                      title: 'Add GST & address',
+                      subtitle: 'Optional — you can add this later in Settings',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 14),
+                          _Label('GST number · optional'),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _gst,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: _inputDec(hint: 'Skip if unregistered'),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 118,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _Label('Currency'),
-                              const SizedBox(height: 6),
-                              DropdownButtonFormField<String>(
-                                value: _currency,
-                                decoration: _inputDec(hint: ''),
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-                                items: _currencies
-                                    .map((c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text('₹  $c',
-                                        style: const TextStyle(fontSize: 14))))
-                                    .toList(),
-                                onChanged: (v) => setState(() => _currency = v!),
-                              ),
-                            ],
+                          const SizedBox(height: 18),
+                          _Label('Address'),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _address,
+                            maxLines: 2,
+                            decoration: _inputDec(hint: ''),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 28),
 
@@ -327,4 +341,93 @@ class _Label extends StatelessWidget {
           color: Color(0xFF5B4FCF),
           fontSize: 13,
           fontWeight: FontWeight.w500));
+}
+
+// ─── Expandable "optional details" section ────────────────────────────────────
+
+class _ExpandableSection extends StatelessWidget {
+  const _ExpandableSection({
+    required this.expanded,
+    required this.onToggle,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final bool expanded;
+  final VoidCallback onToggle;
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  static const _purple = Color(0xFF5B4FCF);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                        color: _purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.receipt_outlined,
+                        color: _purple, size: 16),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2430))),
+                        const SizedBox(height: 1),
+                        Text(subtitle,
+                            style: const TextStyle(
+                                fontSize: 11.5, color: Color(0xFF9AA0AB))),
+                      ],
+                    ),
+                  ),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: Color(0xFF9AA0AB)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity, height: 0),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: child,
+            ),
+            crossFadeState: expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 180),
+            sizeCurve: Curves.easeInOut,
+          ),
+        ],
+      ),
+    );
+  }
 }

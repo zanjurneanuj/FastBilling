@@ -5,12 +5,15 @@ import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../services/PdfTemplateService.dart';
+import '../../services/PosPrinterService.dart';
 import '../../services/ProfileService.dart';
 import '../../services/auth_service.dart';
 import '../../models/PdfTemplate.dart';
+import '../../models/PosPrinter.dart';
 import '../../utils/app_colors.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import 'PdfTemplateCard.dart';
+import 'PosPrinterConnectView.dart';
 import 'pdf_templates_page.dart';
 
 class SettingsView extends StatefulWidget {
@@ -34,15 +37,23 @@ class _SettingsViewState extends State<SettingsView>
     // Rebuild the "PDF template" tile whenever the selection changes,
     // whether from this screen's dialog or the full browse page.
     PdfTemplateService.changed.addListener(_onPdfTemplateChanged);
+    // Rebuild the "POS printer" tile whenever connection state changes,
+    // whether from this screen or the printer connect screen.
+    PosPrinterService.changed.addListener(_onPrinterChanged);
   }
 
   @override
   void dispose() {
     PdfTemplateService.changed.removeListener(_onPdfTemplateChanged);
+    PosPrinterService.changed.removeListener(_onPrinterChanged);
     super.dispose();
   }
 
   void _onPdfTemplateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onPrinterChanged() {
     if (mounted) setState(() {});
   }
 
@@ -60,6 +71,15 @@ class _SettingsViewState extends State<SettingsView>
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     return _businessName.isNotEmpty ? _businessName[0].toUpperCase() : '?';
   }
+
+  String get _printerSubtitle {
+    if (PosPrinterService.isConnected) {
+      final d = PosPrinterService.connectedDevice!;
+      return '• Connected — ${d.name}';
+    }
+    return 'Not connected';
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -123,6 +143,20 @@ class _SettingsViewState extends State<SettingsView>
                   trailingText: '₹ $_currency',
                   showChevron: true,
                   onTap: () => _showCurrencyPicker(context),
+                ),
+                _Divider(),
+                _SettingsTile(
+                  icon: Icons.print_outlined,
+                  label: 'POS printer',
+                  subLabel: _printerSubtitle,
+                  subLabelColor: PosPrinterService.isConnected
+                      ? AppColors.success
+                      : AppColors.textSecondary(context),
+                  showChevron: true,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const PosPrinterConnectView()),
+                  ),
                 ),
               ]),
               const SizedBox(height: 20),

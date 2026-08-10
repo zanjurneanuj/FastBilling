@@ -241,7 +241,7 @@ class _AppBarTitle extends StatelessWidget {
                 color: AppColors.textSecondary(context),
                 fontSize: 11,
                 fontWeight: FontWeight.w400)),
-        const SizedBox(height: 1),
+        const SizedBox(height: 2),
         Row(children: [
           Container(
             width: 28, height: 28,
@@ -252,7 +252,7 @@ class _AppBarTitle extends StatelessWidget {
                 color: Colors.white, size: 14),
           ),
           const SizedBox(width: 8),
-          Text('Zanvoy',
+          Text('Fast Billing',
               style: TextStyle(
                   color: AppColors.textPrimary(context),
                   fontWeight: FontWeight.w700,

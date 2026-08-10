@@ -1,0 +1,109 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1230"/>
+      <stop offset="0.5" stop-color="#1A2560"/>
+      <stop offset="1" stop-color="#3D2FA6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.38" r="0.65">
+      <stop offset="0" stop-color="#6D7FFF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#6D7FFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DDE4F5"/>
+    </linearGradient>
+    <linearGradient id="paperBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FA3E8"/>
+      <stop offset="1" stop-color="#5E74C4"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#FFEB80"/>
+      <stop offset="0.45" stop-color="#FFC233"/>
+      <stop offset="1" stop-color="#F08C00"/>
+    </linearGradient>
+    <linearGradient id="boltEdge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF7CC"/>
+      <stop offset="1" stop-color="#FFD24D"/>
+    </linearGradient>
+    <linearGradient id="totalBar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFD65C"/>
+      <stop offset="1" stop-color="#FFB020"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="26" stdDeviation="34" flood-color="#04081E" flood-opacity="0.55"/>
+    </filter>
+    <filter id="boltShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#3A2500" flood-opacity="0.45"/>
+    </filter>
+    <clipPath id="rounded"><rect width="1024" height="1024" rx="228"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#rounded)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <rect width="1024" height="1024" fill="url(#glow)"/>
+
+    <!-- subtle dot grid -->
+    <g fill="#AFC0FF" fill-opacity="0.10">
+      <circle cx="140" cy="150" r="7"/><circle cx="260" cy="120" r="7"/><circle cx="880" cy="180" r="7"/>
+      <circle cx="930" cy="330" r="7"/><circle cx="110" cy="330" r="7"/><circle cx="150" cy="880" r="7"/>
+      <circle cx="900" cy="860" r="7"/><circle cx="850" cy="720" r="7"/><circle cx="95"  cy="640" r="7"/>
+    </g>
+
+    <!-- speed streaks behind card -->
+    <g stroke="#9FB2FF" stroke-opacity="0.35" stroke-width="16" stroke-linecap="round">
+      <line x1="96"  y1="430" x2="230" y2="430"/>
+      <line x1="130" y1="520" x2="242" y2="520"/>
+      <line x1="782" y1="600" x2="922" y2="600"/>
+      <line x1="760" y1="690" x2="900" y2="690"/>
+    </g>
+
+    <!-- back receipt (tilted, behind) -->
+    <g transform="rotate(-9 512 512)">
+      <path d="M 330 200 H 700 V 800 L 662 772 L 624 800 L 586 772 L 548 800 L 510 772 L 472 800 L 434 772 L 396 800 L 358 772 L 330 800 Z"
+            fill="url(#paperBack)" opacity="0.85"/>
+    </g>
+
+    <!-- main receipt card -->
+    <g transform="rotate(5 512 512)" filter="url(#cardShadow)">
+      <path d="M 312 176 H 712 V 836 L 672 806 L 632 836 L 592 806 L 552 836 L 512 806 L 472 836 L 432 806 L 392 836 L 352 806 L 312 836 Z"
+            fill="url(#paper)"/>
+      <!-- header: logo dot + title lines -->
+      <circle cx="376" cy="258" r="30" fill="#2A3FA8"/>
+      <rect x="428" y="236" width="180" height="22" rx="11" fill="#2A3FA8"/>
+      <rect x="428" y="270" width="118" height="16" rx="8" fill="#9FB0D8"/>
+      <!-- divider -->
+      <rect x="348" y="332" width="328" height="6" rx="3" fill="#C9D4EE"/>
+      <!-- line items -->
+      <g>
+        <rect x="348" y="376" width="170" height="18" rx="9" fill="#6C7FB2"/>
+        <rect x="586" y="376" width="90" height="18" rx="9" fill="#9FB0D8"/>
+        <rect x="348" y="432" width="140" height="18" rx="9" fill="#6C7FB2"/>
+        <rect x="586" y="432" width="90" height="18" rx="9" fill="#9FB0D8"/>
+        <rect x="348" y="488" width="196" height="18" rx="9" fill="#6C7FB2"/>
+        <rect x="586" y="488" width="90" height="18" rx="9" fill="#9FB0D8"/>
+      </g>
+      <!-- total bar -->
+      <rect x="348" y="560" width="328" height="64" rx="18" fill="url(#totalBar)"/>
+      <rect x="372" y="582" width="96" height="20" rx="10" fill="#7A4A00" opacity="0.85"/>
+      <rect x="556" y="582" width="96" height="20" rx="10" fill="#7A4A00"/>
+      <!-- footer lines -->
+      <rect x="348" y="668" width="240" height="14" rx="7" fill="#C9D4EE"/>
+      <rect x="348" y="702" width="180" height="14" rx="7" fill="#C9D4EE"/>
+    </g>
+
+    <!-- gold bolt slicing across the corner of the card -->
+    <g filter="url(#boltShadow)">
+      <path d="M 636 388 L 852 388 L 742 520 L 838 520 L 652 706 L 712 560 L 626 560 Z"
+            fill="url(#bolt)" stroke="#B45309" stroke-opacity="0.4" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M 652 402 L 820 402 L 726 512 L 700 512 Z" fill="url(#boltEdge)" opacity="0.55"/>
+    </g>
+
+    <!-- coin peeking bottom-left -->
+    <g>
+      <circle cx="298" cy="812" r="86" fill="url(#bolt)" stroke="#B45309" stroke-opacity="0.4" stroke-width="6"/>
+      <circle cx="298" cy="812" r="62" fill="none" stroke="#8A5200" stroke-opacity="0.5" stroke-width="8"/>
+      <text x="298" y="846" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="bold" fill="#7A4A00">₹</text>
+    </g>
+  </g>
+</svg>

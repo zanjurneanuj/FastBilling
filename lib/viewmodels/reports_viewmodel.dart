@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/MonthlyRevenue.dart';
 import '../models/ReportsStats.dart';
 import '../models/TopClient.dart';
+import '../views/screens/reports_view.dart';
 
 
 
@@ -11,7 +12,16 @@ class ReportsViewModel extends ChangeNotifier {
   bool isLoading = false;
   ReportsStats stats = ReportsStats.empty();
   int selectedYear = DateTime.now().year;
-
+  ReportPeriod selectedPeriod = ReportPeriod.sixMonths;
+  void setPeriod(ReportPeriod period) {
+    selectedPeriod = period;
+    // TODO: translate `period` into an actual date range and pass it to
+    // loadReports() instead of just a year — right now loadReports only
+    // takes a year, so Week/Month/Custom won't filter correctly until this
+    // is wired to real range logic.
+    loadReports(selectedYear);
+    notifyListeners();
+  }
   Future<void> loadReports([int? year]) async {
     isLoading = true;
     notifyListeners();
@@ -42,7 +52,7 @@ class ReportsViewModel extends ChangeNotifier {
       outstanding:  133200,
       paidRatio:    0.72,
       monthly:      monthly,
-      topClients:   topClients,
+      topClients:   topClients, revenueChangePct: 0, avgPayDays: 0, pendingRatio: 0, overdueRatio: 0, periodLabel: '',
     );
     // ─────────────────────────────────────────────────────────────────────
 
