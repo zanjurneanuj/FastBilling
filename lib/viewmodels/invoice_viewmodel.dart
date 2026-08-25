@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class LineItem {
@@ -21,9 +23,19 @@ class LineItem {
     qty:  qty   ?? this.qty,
     rate: rate  ?? this.rate,
   );
+
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'qty': qty,
+    'rate': rate,
+    'total': total,
+  };
 }
 
 class InvoiceCreateViewModel extends ChangeNotifier {
+  final _firestore = FirebaseFirestore.instance;
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
   // ── Invoice meta ──────────────────────────────────────────────────────────
   String invoiceNumber = _generateInvoiceNumber();
   DateTime dueDate     = DateTime.now().add(const Duration(days: 30));
@@ -112,17 +124,78 @@ class InvoiceCreateViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Firestore helpers ────────────────────────────────────────────────────
+  Map<String, dynamic> _toMap({required String status}) => {
+    'invoiceNumber': invoiceNumber,
+    'dueDate': Timestamp.fromDate(dueDate),
+    'clientId': clientId,
+    'clientName': clientName,
+    'clientEmail': clientEmail,
+    'items': items.map((i) => i.toMap()).toList(),
+    'gstPercent': gstPercent,
+    'discountAmt': discountAmt,
+    'subtotal': subtotal,
+    'gstAmt': gstAmt,
+    'grandTotal': grandTotal,
+    'status': status, // 'draft' | 'sent'
+    'createdAt': FieldValue.serverTimestamp(),
+  };
+
   // ── Save ──────────────────────────────────────────────────────────────────
   Future<bool> saveDraft() async {
-    isSaving = true;
-    notifyListeners();
-    await Future.delayed(const Duration(milliseconds: 500)); // replace with DB call
-    isSaving     = false;
-    isDraftSaved = true;
-    notifyListeners();
-    return true;
-  }
+    debugPrint('>>> saveDraft called, uid=$_uid');   //
+    final uid = _uid;
 
+    if (uid == null) {
+      errorMsg = 'You must be signed in.';
+      notifyListeners();
+      return false;
+    }
+
+    isSaving = true;
+    errorMsg = null;
+    notifyListeners();
+
+    try {
+      final invoiceRef = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('invoices')
+          .doc(invoiceNumber);
+
+      final data = _toMap(status: 'draft');
+
+      debugPrint('========== SAVING INVOICE ==========');
+      debugPrint('UID: $uid');
+      debugPrint('Invoice ID: $invoiceNumber');
+      debugPrint('Path: ${invoiceRef.path}');
+      debugPrint('Data: $data');
+
+      await invoiceRef.set(
+        data,
+        SetOptions(merge: true),
+      );
+
+      debugPrint('========== INVOICE SAVED ==========');
+
+      isSaving = false;
+      isDraftSaved = true;
+      notifyListeners();
+
+      return true;
+    } catch (e, stackTrace) {
+      debugPrint('========== FIRESTORE ERROR ==========');
+      debugPrint('Error: $e');
+      debugPrint('StackTrace: $stackTrace');
+      debugPrint('====================================');
+
+      isSaving = false;
+      errorMsg = 'Failed to save invoice: $e';
+      notifyListeners();
+
+      return false;
+    }
+  }
   Future<bool> saveAndSend() async {
     if (clientId == null) {
       errorMsg = 'Please select a client.';
@@ -134,13 +207,47 @@ class InvoiceCreateViewModel extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+
+    final uid = _uid;
+    if (uid == null) {
+      errorMsg = 'You must be signed in.';
+      notifyListeners();
+      return false;
+    }
+
     isSaving = true;
     errorMsg = null;
     notifyListeners();
-    await Future.delayed(const Duration(milliseconds: 600)); // replace with DB + send call
-    isSaving = false;
-    notifyListeners();
-    return true;
+
+    try {
+      final invoiceRef = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('invoices')
+          .doc(invoiceNumber);
+
+      await invoiceRef.set(_toMap(status: 'sent'));
+
+      // Keep the client's totalBilled in sync
+      final clientRef = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('clients')
+          .doc(clientId);
+      await clientRef.update({
+        'totalBilled': FieldValue.increment(grandTotal),
+      });
+
+      isSaving = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error saving invoice: $e');
+      isSaving = false;
+      errorMsg = 'Failed to save invoice. Please try again.';
+      notifyListeners();
+      return false;
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -157,7 +264,6 @@ class InvoiceCreateViewModel extends ChangeNotifier {
   }
 
   String fmtFull(double v) {
-    // e.g. 117410 → "1,17,410"  (Indian numbering)
     final s = v.toStringAsFixed(0);
     if (s.length <= 3) return s;
     final last3  = s.substring(s.length - 3);

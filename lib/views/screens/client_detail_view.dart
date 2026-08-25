@@ -1,3 +1,4 @@
+import 'package:fast_billing/views/screens/home_view.dart';
 import 'package:flutter/material.dart';
 
   class ClientDetailView extends StatelessWidget {
@@ -8,6 +9,17 @@ import 'package:flutter/material.dart';
     return Scaffold(
       appBar: AppBar(
         title: const Text('ClientDetailView'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const HomeView(),
+              ),
+            );
+          },
+        ),
       ),
       body: const Center(
         child: Text('TODO: Implement ClientDetailView'),

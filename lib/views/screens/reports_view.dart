@@ -97,7 +97,9 @@ class _ReportsViewState extends State<ReportsView>
     super.didChangeDependencies();
     if (!_loaded) {
       _loaded = true;
-      context.read<ReportsViewModel>().loadReports();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<ReportsViewModel>().loadReports();
+      });
     }
   }
 
@@ -435,61 +437,68 @@ class _LineChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final maxIdx = monthly.indexWhere((m) => m.amount == maxAmt);
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _LineChartPainter(
-              values: monthly.map<double>((m) => m.amount as double).toList(),
-              maxAmt: maxAmt,
-              lineColor: c.purple,
-            ),
-          ),
-        ),
-        // Tooltip bubble over peak
-        if (maxIdx != -1)
-          LayoutBuilder(builder: (context, constraints) {
-            final chartH = constraints.maxHeight - 22;
-            final stepX = constraints.maxWidth / (monthly.length - 1);
-            final x = stepX * maxIdx;
-            final ratio = maxAmt > 0 ? monthly[maxIdx].amount / maxAmt : 0.0;
-            final y = chartH - (chartH * ratio);
-            return Positioned(
-              left: (x - 34).clamp(0, constraints.maxWidth - 68),
-              top: (y - 34).clamp(0.0, double.infinity),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: c.textPrimary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${monthly[maxIdx].month}: ₹${fmt(monthly[maxIdx].amount as double)}',
-                  style: TextStyle(
-                    color: c.bg,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Compute tooltip position once, using the Stack's own constraints
+        Widget? tooltip;
+        if (maxIdx != -1) {
+          final chartH = constraints.maxHeight - 22;
+          final stepX = constraints.maxWidth / (monthly.length - 1);
+          final x = stepX * maxIdx;
+          final ratio = maxAmt > 0 ? monthly[maxIdx].amount / maxAmt : 0.0;
+          final y = chartH - (chartH * ratio);
+
+          tooltip = Positioned(
+            left: (x - 34).clamp(0, constraints.maxWidth - 68),
+            top: (y - 34).clamp(0.0, double.infinity),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: c.textPrimary,
+                borderRadius: BorderRadius.circular(8),
               ),
-            );
-          }),
-        // Month labels
-        Positioned(
-          left: 0, right: 0, bottom: 0,
-          child: Row(
-            children: monthly
-                .map<Widget>((m) => Expanded(
               child: Text(
-                m.month as String,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: c.textDim, fontSize: 10),
+                '${monthly[maxIdx].month}: ₹${fmt(monthly[maxIdx].amount as double)}',
+                style: TextStyle(
+                  color: c.bg,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ))
-                .toList(),
-          ),
-        ),
-      ],
+            ),
+          );
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _LineChartPainter(
+                  values: monthly.map<double>((m) => m.amount as double).toList(),
+                  maxAmt: maxAmt,
+                  lineColor: c.purple,
+                ),
+              ),
+            ),
+            if (tooltip != null) tooltip,
+            // Month labels
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: Row(
+                children: monthly
+                    .map<Widget>((m) => Expanded(
+                  child: Text(
+                    m.month as String,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: c.textDim, fontSize: 10),
+                  ),
+                ))
+                    .toList(),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

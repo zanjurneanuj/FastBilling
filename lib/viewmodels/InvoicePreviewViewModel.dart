@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/InvoiceDetail.dart';
@@ -23,30 +25,21 @@ class InvoicePreviewViewModel extends ChangeNotifier {
     PdfTemplateService.changed.removeListener(_onTemplateChanged);
     super.dispose();
   }
-  Future<void> load(String id) async {
+  Future<void> load(String invoiceId) async {
     isLoading = true;
     notifyListeners();
 
-    // ── Replace with real DB fetch by id ─────────────────────────────────
-    await Future.delayed(const Duration(milliseconds: 400));
-    invoice = InvoiceDetail(
-      invoiceNumber: 'INV-2026-014',
-      status:        'Paid',
-      senderName:    'Aarav Sharma',
-      senderAddress: 'Bengaluru 560001',
-      senderGst:     null, // null = unregistered
-      clientName:    'Meridian Studio',
-      clientEmail:   'hello@meridian.co',
-      issuedDate:    '12 Jun 2026',
-      gstPercent:    18,
-      note: 'Thank you for your business. Payment received via UPI on 14 Jun 2026.',
-      items: const [
-        InvoiceLineItem(name: 'UI/UX Design',          qty: 24, rate: 2500),
-        InvoiceLineItem(name: 'Logo & Identity',        qty: 1,  rate: 35000),
-        InvoiceLineItem(name: 'Consultation',           qty: 3,  rate: 1500),
-      ],
-    );
-    // ─────────────────────────────────────────────────────────────────────
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) { isLoading = false; notifyListeners(); return; }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users').doc(uid)
+        .collection('invoices').doc(invoiceId)
+        .get();
+
+    if (doc.exists) {
+      invoice = InvoiceDetail.fromMap(doc.data()!); // adjust to your model
+    }
 
     isLoading = false;
     notifyListeners();

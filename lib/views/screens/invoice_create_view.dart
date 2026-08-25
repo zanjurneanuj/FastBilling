@@ -409,7 +409,6 @@ class _ClientPicker extends StatelessWidget {
 
 // ─── Line Item Row ────────────────────────────────────────────────────────────
 
-
 class _LineItemRow extends StatefulWidget {
   const _LineItemRow({
     required this.item,
@@ -491,14 +490,12 @@ class _LineItemRowState extends State<_LineItemRow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           // ── Top section: icon + name + total + delete ───────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 18, 12, 16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-
                 // Icon badge
                 Container(
                   width: 32,
@@ -577,7 +574,6 @@ class _LineItemRowState extends State<_LineItemRow> {
             padding: const EdgeInsets.fromLTRB(12, 9, 12, 12),
             child: Row(
               children: [
-
                 // Qty pill
                 _InputPill(
                   width: 80,
@@ -633,8 +629,10 @@ class _LineItemRowState extends State<_LineItemRow> {
 
                 // = total chip
                 Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: hasValue
                         ? AppColors.primary.withOpacity(0.08)
@@ -670,11 +668,7 @@ class _LineItemRowState extends State<_LineItemRow> {
 // ── Reusable input pill widget ─────────────────────────────────────────────────
 
 class _InputPill extends StatelessWidget {
-  const _InputPill({
-    required this.child,
-    required this.prefix,
-    this.width,
-  });
+  const _InputPill({required this.child, required this.prefix, this.width});
 
   final Widget child;
   final String prefix;
@@ -706,7 +700,7 @@ class _InputPill extends StatelessWidget {
         border: Border.all(color: AppColors.border(context)),
       ),
       child: width != null
-          ? inner  // fixed width: Row with min mainAxisSize is fine
+          ? inner // fixed width: Row with min mainAxisSize is fine
           : inner, // expanded: parent Expanded handles sizing
     );
   }
@@ -1054,9 +1048,11 @@ class _BottomBar extends StatelessWidget {
               onPressed: vm.isSaving
                   ? null
                   : () async {
-                      await vm.saveDraft();
-                      if (context.mounted) {
-                        context.go('/invoices/draft/preview');
+                debugPrint('=== PREVIEW BUTTON TAPPED ===');  // ← add
+                final ok = await vm.saveDraft();
+                debugPrint('=== saveDraft returned: $ok ===');
+                if (ok && context.mounted) {
+                        context.push('/invoices/${vm.invoiceNumber}/preview');
                       }
                     },
               style: OutlinedButton.styleFrom(
@@ -1079,12 +1075,13 @@ class _BottomBar extends StatelessWidget {
           Expanded(
             flex: 2,
             child: ElevatedButton(
-              onPressed: vm.isSaving
-                  ? null
-                  : () async {
-                      final ok = await vm.saveAndSend();
-                      if (ok && context.mounted) context.pop();
-                    },
+              onPressed: () async {
+                debugPrint('>>> Save & send button tapped');
+                final ok = await vm.saveAndSend();
+                if (ok && context.mounted) {
+                  context.push('/invoices/${vm.invoiceNumber}/preview');
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 minimumSize: const Size(0, 52),

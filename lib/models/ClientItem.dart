@@ -12,4 +12,13 @@ class ClientItem {
     this.phone = '',
     this.totalBilled = 0,
   });
+  factory ClientItem.fromMap(String id, Map<String, dynamic> data) {
+    return ClientItem(
+      id: id,
+      name: data['name'] ?? '',
+      email: data['email'] ?? '',
+      phone: data['phone'] ?? '',
+      totalBilled: (data['totalBilled'] ?? 0).toDouble(),
+    );
+  }
 }
