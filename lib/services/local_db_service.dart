@@ -1,9 +1,19 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/BusinessProfile.dart';
 import '../models/UserModel.dart';
 
+/// Local persistence for the business profile, cached users, and small app
+/// settings (currency/language/printer prefs/etc). Backed by sqflite, which
+/// has no implementation on Flutter Web — every public method below
+/// short-circuits when `kIsWeb` instead of throwing "databaseFactory not
+/// initialized" the moment anything touches `database`. Settings fall back
+/// to an in-memory map (works for the session, lost on page reload); profile
+/// and user lookups return null/no-op since Firestore is already the source
+/// of truth for those via ProfileService's cloud fallback and AuthService's
+/// Firestore sync.
 class LocalDbService {
   LocalDbService._();
   static final LocalDbService instance = LocalDbService._();
@@ -15,6 +25,7 @@ class LocalDbService {
   static const _settingsTable = 'settings'; // ← new
 
   Database? _db;
+  final Map<String, String> _webSettings = {};
 
   Future<Database> get database async => _db ??= await _open();
 
@@ -72,6 +83,7 @@ class LocalDbService {
 
   /// Read a setting by key. Returns null if the key has never been written.
   Future<String?> getSetting(String key) async {
+    if (kIsWeb) return _webSettings[key];
     final db = await database;
     final rows = await db.query(
       _settingsTable,
@@ -85,6 +97,10 @@ class LocalDbService {
 
   /// Write (insert or overwrite) a setting.
   Future<void> saveSetting(String key, String value) async {
+    if (kIsWeb) {
+      _webSettings[key] = value;
+      return;
+    }
     final db = await database;
     await db.insert(
       _settingsTable,
@@ -95,6 +111,10 @@ class LocalDbService {
 
   /// Remove a setting (e.g. on logout / reset).
   Future<void> deleteSetting(String key) async {
+    if (kIsWeb) {
+      _webSettings.remove(key);
+      return;
+    }
     final db = await database;
     await db.delete(_settingsTable, where: 'key = ?', whereArgs: [key]);
   }
@@ -102,12 +122,14 @@ class LocalDbService {
   // ── Profile CRUD ──────────────────────────────────────────────────────────
 
   Future<void> saveProfile(BusinessProfile p) async {
+    if (kIsWeb) return;
     final db = await database;
     await db.insert(_profileTable, p.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<BusinessProfile?> getProfile(String uid) async {
+    if (kIsWeb) return null;
     final db = await database;
     final rows = await db.query(_profileTable,
         where: 'uid = ?', whereArgs: [uid], limit: 1);
@@ -117,12 +139,14 @@ class LocalDbService {
   // ── User CRUD ─────────────────────────────────────────────────────────────
 
   Future<void> saveUser(UserModel user) async {
+    if (kIsWeb) return;
     final db = await database;
     await db.insert(_userTable, user.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<UserModel?> getUser(String uid) async {
+    if (kIsWeb) return null;
     final db = await database;
     final rows = await db.query(_userTable,
         where: 'uid = ?', whereArgs: [uid], limit: 1);
@@ -130,6 +154,7 @@ class LocalDbService {
   }
 
   Future<UserModel?> getCurrentUser() async {
+    if (kIsWeb) return null;
     final db = await database;
     final rows =
     await db.query(_userTable, orderBy: 'last_login_at DESC', limit: 1);
@@ -137,11 +162,13 @@ class LocalDbService {
   }
 
   Future<void> deleteUser(String uid) async {
+    if (kIsWeb) return;
     final db = await database;
     await db.delete(_userTable, where: 'uid = ?', whereArgs: [uid]);
   }
 
   Future<void> clearUsers() async {
+    if (kIsWeb) return;
     final db = await database;
     await db.delete(_userTable);
   }
