@@ -282,6 +282,15 @@ class _SubtitleText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const colored = 'your invoices.';
+    // Only English copy contains this literal — Hindi/Marathi translations
+    // don't, so splitting/re-appending it there would tack untranslated
+    // English text onto the end of the sentence. Fall back to plain text
+    // whenever the substring isn't actually present.
+    if (!text.contains(colored)) {
+      return Text(text,
+          style: TextStyle(
+              fontSize: 15, height: 1.4, color: AppColors.textSecondary(context)));
+    }
     final plain = text.replaceAll(colored, '');
     return RichText(text: TextSpan(
       style: const TextStyle(fontSize: 15, height: 1.4),

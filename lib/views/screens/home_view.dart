@@ -315,7 +315,7 @@ class _DashboardTab extends StatelessWidget {
                             (inv) => InvoiceCard(
                           invoice: inv,
                           onTap: () => context
-                              .go('/invoices/${inv.id}/preview'),
+                              .push('/invoices/${inv.id}/preview'),
                         ),
                       ),
                   ]),

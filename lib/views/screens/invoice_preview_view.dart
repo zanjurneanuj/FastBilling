@@ -76,6 +76,17 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
     });
   }
 
+  // Pop back if there's somewhere to pop to (the normal case — reached via
+  // push from the list/dashboard); otherwise fall back to the invoices list
+  // (e.g. deep-linked directly into this screen with an empty stack).
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/invoices');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<InvoicePreviewViewModel>(
@@ -89,7 +100,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             leading: IconButton(
               icon: Icon(Icons.arrow_back_rounded,
                   color: AppColors.textPrimary(context)),
-              onPressed: () => context.pop(),
+              onPressed: _goBack,
             ),
             title: Text('Preview',
                 style: TextStyle(
@@ -128,8 +139,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
         title: 'Invoice not found',
         subtitle: 'This invoice may have been deleted.',
         actionLabel: 'Back to invoices',
-        onAction: () =>
-        context.canPop() ? context.pop() : context.go('/invoices'),
+        onAction: _goBack,
       );
     }
     if (vm.invoice == null) {
@@ -248,7 +258,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
               final ok = await vm.deleteInvoice();
               if (!context.mounted) return;
               if (ok) {
-                context.canPop() ? context.pop() : context.go('/invoices');
+                _goBack();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(vm.errorMsg ?? 'Could not delete invoice.')));

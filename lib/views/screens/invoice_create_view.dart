@@ -102,6 +102,7 @@ class _InvoiceCreateBody extends StatelessWidget {
                       const SizedBox(height: 10),
                       ...vm.items.map(
                         (item) => _LineItemRow(
+                          key: ValueKey(item.id),
                           item: item,
                           onChanged: ({name, qty, rate}) => vm.updateItem(
                             item.id,
@@ -580,6 +581,7 @@ class _ClientPicker extends StatelessWidget {
 
 class _LineItemRow extends StatefulWidget {
   const _LineItemRow({
+    super.key,
     required this.item,
     required this.onChanged,
     required this.onDelete,
