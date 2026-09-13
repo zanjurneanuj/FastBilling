@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/locale_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_strings.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -43,6 +44,7 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.watch<LocaleProvider>().current;
     return Scaffold(
       body: SafeArea(
         child: Consumer<AuthViewModel>(
@@ -59,7 +61,7 @@ class _LoginViewState extends State<LoginView> {
                     const SizedBox(height: 28),
 
                     Text(
-                      AppStrings.welcomeBack,
+                      AppStrings.welcomeBack(locale),
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             color: AppColors.textPrimary(context),
                             fontWeight: FontWeight.w700,
@@ -67,10 +69,10 @@ class _LoginViewState extends State<LoginView> {
                           ),
                     ),
                     const SizedBox(height: 6),
-                    _SubtitleText(AppStrings.loginSubtitle),
+                    _SubtitleText(AppStrings.loginSubtitle(locale)),
                     const SizedBox(height: 36),
 
-                    _FieldLabel(AppStrings.emailLabel),
+                    _FieldLabel(AppStrings.emailLabel(locale)),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _emailCtrl,
@@ -84,16 +86,16 @@ class _LoginViewState extends State<LoginView> {
                             color: AppColors.textSecondary(context), size: 20),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return AppStrings.emailRequired;
+                        if (v == null || v.isEmpty) return AppStrings.emailRequired(locale);
                         if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
-                          return AppStrings.emailInvalid;
+                          return AppStrings.emailInvalid(locale);
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
 
-                    _FieldLabel(AppStrings.passwordLabel),
+                    _FieldLabel(AppStrings.passwordLabel(locale)),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _passCtrl,
@@ -116,8 +118,8 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return AppStrings.passwordRequired;
-                        if (v.length < 6) return AppStrings.passwordMinLen;
+                        if (v == null || v.isEmpty) return AppStrings.passwordRequired(locale);
+                        if (v.length < 6) return AppStrings.passwordMinLen(locale);
                         return null;
                       },
                     ),
@@ -126,8 +128,8 @@ class _LoginViewState extends State<LoginView> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () => _showForgotPassword(context, vm),
-                        child: const Text(AppStrings.forgotPassword,
-                            style: TextStyle(color: AppColors.primary,
+                        child: Text(AppStrings.forgotPassword(locale),
+                            style: const TextStyle(color: AppColors.primary,
                                 fontWeight: FontWeight.w500, fontSize: 13)),
                       ),
                     ),
@@ -146,16 +148,17 @@ class _LoginViewState extends State<LoginView> {
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2.5, color: Colors.white))
-                            : const Text(AppStrings.signIn),
+                            : Text(AppStrings.signIn(locale)),
                       ),
                     ),
                     const SizedBox(height: 24),
 
-                    _OrDivider(),
+                    _OrDivider(locale: locale),
                     const SizedBox(height: 20),
 
                     _GoogleButton(
                       loading: vm.isLoading,
+                      locale: locale,
                       onTap: () => _googleSignIn(vm),
                     ),
                     const SizedBox(height: 48),
@@ -164,7 +167,7 @@ class _LoginViewState extends State<LoginView> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(AppStrings.newHere,
+                          Text(AppStrings.newHere(locale),
                               style: TextStyle(
                                   color: AppColors.textSecondary(context), fontSize: 14)),
                           TextButton(
@@ -174,8 +177,8 @@ class _LoginViewState extends State<LoginView> {
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text(AppStrings.createAccount,
-                                style: TextStyle(color: AppColors.primary,
+                            child: Text(AppStrings.createAccount(locale),
+                                style: const TextStyle(color: AppColors.primary,
                                     fontWeight: FontWeight.w600, fontSize: 14)),
                           ),
                         ],
@@ -316,20 +319,24 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 class _OrDivider extends StatelessWidget {
+  const _OrDivider({required this.locale});
+  final AppLocale locale;
   @override
   Widget build(BuildContext context) => Row(children: [
     Expanded(child: Divider(color: AppColors.border(context))),
     Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text(AppStrings.orDivider,
+        child: Text(AppStrings.orDivider(locale),
             style: TextStyle(color: AppColors.textHint(context), fontSize: 13))),
     Expanded(child: Divider(color: AppColors.border(context))),
   ]);
 }
 
 class _GoogleButton extends StatelessWidget {
-  const _GoogleButton({required this.loading, required this.onTap});
+  const _GoogleButton(
+      {required this.loading, required this.onTap, required this.locale});
   final bool loading;
   final VoidCallback onTap;
+  final AppLocale locale;
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity, height: 52,
@@ -343,7 +350,7 @@ class _GoogleButton extends StatelessWidget {
         const Text('G', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
             color: Color(0xFF4285F4))),
         const SizedBox(width: 10),
-        Text(AppStrings.continueGoogle, style: TextStyle(
+        Text(AppStrings.continueGoogle(locale), style: TextStyle(
             fontSize: 15, fontWeight: FontWeight.w500,
             color: AppColors.textPrimary(context))),
       ]),

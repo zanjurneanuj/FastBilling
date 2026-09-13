@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/locale_provider.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/app_strings.dart';
 import '../../viewmodels/dashboard_viewmodel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/invoice_card.dart';
@@ -31,13 +33,18 @@ class _HomeViewState extends State<HomeView> {
     });
   }
 
-  // Each tab is a full screen — kept alive so state isn't lost on tab switch
-  static const List<Widget> _tabs = [
-    _DashboardTab(),
-    InvoiceListView(),
-    ClientsView(),
-    ReportsView(),
-    SettingsView(),
+  void _goToTab(int index) => setState(() => _selectedIndex = index);
+
+  // Each tab is a full screen — kept alive so state isn't lost on tab switch.
+  // Not `const` (Dashboard needs the tab-switch callback below), but Flutter
+  // still preserves each tab's own State across rebuilds since they keep
+  // the same type/position in this list.
+  List<Widget> get _tabs => [
+    _DashboardTab(onNavigateTab: _goToTab),
+    const InvoiceListView(),
+    const ClientsView(),
+    const ReportsView(),
+    const SettingsView(),
   ];
 
   @override
@@ -56,7 +63,7 @@ class _HomeViewState extends State<HomeView> {
       // FAB only on Home tab
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
-        onPressed: () => context.go('/invoices/create'),
+        onPressed: () => context.push('/invoices/create'),
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       )
@@ -67,7 +74,8 @@ class _HomeViewState extends State<HomeView> {
 
 // ─── Notifications sheet ────────────────────────────────────────────────────────
 
-void _showNotifications(BuildContext context, DashboardStats stats) {
+void _showNotifications(
+    BuildContext context, DashboardStats stats, VoidCallback onViewInvoices) {
   final items = <(IconData, Color, String, String)>[
     if (stats.overdueCount > 0)
       (
@@ -145,7 +153,7 @@ void _showNotifications(BuildContext context, DashboardStats stats) {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    context.go('/invoices');
+                    onViewInvoices();
                   },
                   child: const Text('View invoices'),
                 ),
@@ -166,6 +174,7 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = context.watch<LocaleProvider>().current;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface(context),
@@ -178,31 +187,31 @@ class _BottomNav extends StatelessWidget {
         elevation: 0,
         indicatorColor: AppColors.primary.withValues(alpha: 0.12),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon:         Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary),
-            label: 'Home',
+            icon:         const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(Icons.home_rounded, color: AppColors.primary),
+            label: AppStrings.navHome(locale),
           ),
           NavigationDestination(
-            icon:         Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded, color: AppColors.primary),
-            label: 'Invoices',
+            icon:         const Icon(Icons.receipt_long_outlined),
+            selectedIcon: const Icon(Icons.receipt_long_rounded, color: AppColors.primary),
+            label: AppStrings.navInvoices(locale),
           ),
           NavigationDestination(
-            icon:         Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people_rounded, color: AppColors.primary),
-            label: 'Clients',
+            icon:         const Icon(Icons.people_outline),
+            selectedIcon: const Icon(Icons.people_rounded, color: AppColors.primary),
+            label: AppStrings.navClients(locale),
           ),
           NavigationDestination(
-            icon:         Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart_rounded, color: AppColors.primary),
-            label: 'Reports',
+            icon:         const Icon(Icons.bar_chart_outlined),
+            selectedIcon: const Icon(Icons.bar_chart_rounded, color: AppColors.primary),
+            label: AppStrings.navReports(locale),
           ),
           NavigationDestination(
-            icon:         Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings_rounded, color: AppColors.primary),
-            label: 'Settings',
+            icon:         const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings_rounded, color: AppColors.primary),
+            label: AppStrings.navSettings(locale),
           ),
         ],
       ),
@@ -213,7 +222,8 @@ class _BottomNav extends StatelessWidget {
 // ─── Dashboard Tab ────────────────────────────────────────────────────────────
 
 class _DashboardTab extends StatelessWidget {
-  const _DashboardTab();
+  const _DashboardTab({required this.onNavigateTab});
+  final ValueChanged<int> onNavigateTab;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +249,8 @@ class _DashboardTab extends StatelessWidget {
                       IconButton(
                         icon: Icon(Icons.notifications_outlined,
                             color: AppColors.textSecondary(context), size: 24),
-                        onPressed: () => _showNotifications(context, vm.stats),
+                        onPressed: () => _showNotifications(
+                            context, vm.stats, () => onNavigateTab(1)),
                       ),
                       if (vm.stats.overdueCount > 0)
                         Positioned(
@@ -255,7 +266,7 @@ class _DashboardTab extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 16, left: 4),
                     child: GestureDetector(
-                      onTap: () => context.go('/settings'),
+                      onTap: () => onNavigateTab(4),
                       child: _AvatarCircle(name: vm.businessName),
                     ),
                   ),
@@ -277,18 +288,18 @@ class _DashboardTab extends StatelessWidget {
                     const SizedBox(height: 10),
                     _StatsRow2(stats: vm.stats),
                     const SizedBox(height: 24),
-                    _QuickActions(),
+                    _QuickActions(onNavigateTab: onNavigateTab),
                     const SizedBox(height: 16),
                     if (vm.stats.overdueCount > 0) ...[
                       _OverdueBanner(
                         count: vm.stats.overdueCount,
-                        onTap: () => context.go('/invoices'),
+                        onTap: () => onNavigateTab(1),
                       ),
                       const SizedBox(height: 16),
                     ],
                     _SectionHeader(
                       title: 'Recent Invoices',
-                      onSeeAll: () => context.go('/invoices'),
+                      onSeeAll: () => onNavigateTab(1),
                     ),
                     const SizedBox(height: 12),
                     if (vm.recentInvoices.isEmpty)
@@ -297,7 +308,7 @@ class _DashboardTab extends StatelessWidget {
                         title: 'No invoices yet',
                         subtitle: 'Tap + to create your first invoice.',
                         actionLabel: 'Create Invoice',
-                        onAction: () => context.go('/invoices/create'),
+                        onAction: () => context.push('/invoices/create'),
                       )
                     else
                       ...vm.recentInvoices.map(
@@ -650,7 +661,8 @@ class _StatTile extends StatelessWidget {
 // ─── Quick Actions ────────────────────────────────────────────────────────────
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions();
+  const _QuickActions({required this.onNavigateTab});
+  final ValueChanged<int> onNavigateTab;
 
   @override
   Widget build(BuildContext context) {
@@ -668,25 +680,25 @@ class _QuickActions extends StatelessWidget {
             icon: Icons.add,
             label: 'New\nInvoice',
             filled: true,
-            onTap: () => context.go('/invoices/create'),
+            onTap: () => context.push('/invoices/create'),
           ),
           const SizedBox(width: 10),
           _QACard(
             icon: Icons.people_outline_rounded,
             label: 'Clients',
-            onTap: () => context.go('/clients'),
+            onTap: () => onNavigateTab(2),
           ),
           const SizedBox(width: 10),
           _QACard(
             icon: Icons.inventory_2_outlined,
             label: 'Items',
-            onTap: () => context.go('/catalog'),
+            onTap: () => context.push('/catalog'),
           ),
           const SizedBox(width: 10),
           _QACard(
             icon: Icons.bar_chart_rounded,
             label: 'Reports',
-            onTap: () => context.go('/reports'),
+            onTap: () => onNavigateTab(3),
           ),
         ]),
       ],

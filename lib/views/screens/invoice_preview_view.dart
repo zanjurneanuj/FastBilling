@@ -128,7 +128,8 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
         title: 'Invoice not found',
         subtitle: 'This invoice may have been deleted.',
         actionLabel: 'Back to invoices',
-        onAction: () => context.go('/invoices'),
+        onAction: () =>
+        context.canPop() ? context.pop() : context.go('/invoices'),
       );
     }
     if (vm.invoice == null) {
@@ -175,7 +176,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             label: 'Edit invoice',
             onTap: () {
               Navigator.pop(context);
-              context.go('/invoices/create', extra: vm.invoice?.id);
+              context.push('/invoices/create', extra: vm.invoice?.id);
             },
           ),
           _SheetTile(
@@ -202,7 +203,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
               final newId = await vm.duplicateInvoice();
               if (!context.mounted) return;
               if (newId != null) {
-                context.go('/invoices/$newId/preview');
+                context.push('/invoices/$newId/preview');
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(vm.errorMsg ?? 'Could not duplicate invoice.')));
@@ -247,7 +248,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
               final ok = await vm.deleteInvoice();
               if (!context.mounted) return;
               if (ok) {
-                context.go('/invoices');
+                context.canPop() ? context.pop() : context.go('/invoices');
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(vm.errorMsg ?? 'Could not delete invoice.')));

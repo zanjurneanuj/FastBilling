@@ -160,7 +160,7 @@ class _ClientsViewState extends State<ClientsView>
                       itemBuilder: (_, i) => _ClientRow(
                         client: clients[i],
                         onTap: () => context
-                            .go('/clients/${clients[i].id}'),
+                            .push('/clients/${clients[i].id}'),
                       ),
                     ),
                   ),

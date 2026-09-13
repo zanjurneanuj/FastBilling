@@ -110,7 +110,7 @@ class _ClientDetailViewState extends State<ClientDetailView> {
         title: 'Client not found',
         subtitle: 'This client may have been deleted.',
         actionLabel: 'Back to clients',
-        onAction: () => context.go('/clients'),
+        onAction: _goBack,
       )
           : RefreshIndicator(
         color: AppColors.primary,
@@ -180,7 +180,7 @@ class _ClientDetailViewState extends State<ClientDetailView> {
             else
               ..._invoices.map((inv) => _InvoiceTile(
                 invoice: inv,
-                onTap: () => context.go('/invoices/${inv.id}/preview'),
+                onTap: () => context.push('/invoices/${inv.id}/preview'),
               )),
           ],
         ),

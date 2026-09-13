@@ -198,7 +198,7 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
                       const SizedBox(height: 10),
                       itemBuilder: (_, i) => _InvoiceRow(
                         invoice: filtered[i],
-                        onTap: () => context.go(
+                        onTap: () => context.push(
                             '/invoices/${filtered[i].id}/preview'),
                       ),
                     ),
@@ -210,7 +210,7 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
 
           // ── FAB ─────────────────────────────────────────────────────────
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => context.go('/invoices/create'),
+            onPressed: () => context.push('/invoices/create'),
             backgroundColor: AppColors.primary,
             icon: const Icon(Icons.add, color: Colors.white),
             label: const Text('New',
