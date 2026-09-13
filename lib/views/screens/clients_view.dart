@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/ClientItem.dart';
 import '../../utils/app_colors.dart';
 import '../../viewmodels/client_viewmodel.dart';
+import '../widgets/client_avatar.dart';
 import '../widgets/empty_state.dart';
 
 class ClientsView extends StatefulWidget {
@@ -21,6 +22,7 @@ class _ClientsViewState extends State<ClientsView>
 
   final _searchCtrl = TextEditingController();
   bool _loaded = false;
+  String? _shownError;
 
   @override
   void didChangeDependencies() {
@@ -42,8 +44,8 @@ class _ClientsViewState extends State<ClientsView>
     if (q.isEmpty) return all;
     return all
         .where((c) =>
-    c!.name.toLowerCase().contains(q) ||
-        c!.email.toLowerCase().contains(q))
+    c.name.toLowerCase().contains(q) ||
+        c.email.toLowerCase().contains(q))
         .toList();
   }
 
@@ -53,6 +55,15 @@ class _ClientsViewState extends State<ClientsView>
     return Consumer<ClientsViewModel>(
       builder: (context, vm, _) {
         final clients = _filtered(vm.clients);
+
+        if (vm.errorMsg != null && vm.errorMsg != _shownError) {
+          _shownError = vm.errorMsg;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(vm.errorMsg!)));
+          });
+        }
 
         return Scaffold(
           backgroundColor: AppColors.background(context),
@@ -299,7 +310,7 @@ class _ClientRow extends StatelessWidget {
           border: Border.all(color: AppColors.border(context)),
         ),
         child: Row(children: [
-          _ClientAvatar(name: client.name),
+          ClientAvatar(name: client.name, size: 44),
           const SizedBox(width: 12),
 
           // Name + email
@@ -345,44 +356,3 @@ class _ClientRow extends StatelessWidget {
   }
 }
 
-// ─── Client Avatar ────────────────────────────────────────────────────────────
-
-class _ClientAvatar extends StatelessWidget {
-  const _ClientAvatar({required this.name});
-  final String name;
-
-  static const _palettes = [
-    (bg: Color(0xFFE8E4FF), fg: Color(0xFF6C5CE7)),
-    (bg: Color(0xFFE0F4FF), fg: Color(0xFF0984E3)),
-    (bg: Color(0xFFFFE8E8), fg: Color(0xFFE17055)),
-    (bg: Color(0xFFE8FFE8), fg: Color(0xFF00B894)),
-    (bg: Color(0xFFFFF3E0), fg: Color(0xFFF39C12)),
-    (bg: Color(0xFFFFE4F3), fg: Color(0xFFE84393)),
-  ];
-
-  String get _initials {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
-
-  ({Color bg, Color fg}) get _color {
-    final idx = name.codeUnits.fold(0, (a, b) => a + b) % _palettes.length;
-    return _palettes[idx];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _color;
-    return Container(
-      width: 44, height: 44,
-      decoration:
-      BoxDecoration(color: c.bg, borderRadius: BorderRadius.circular(12)),
-      child: Center(
-        child: Text(_initials,
-            style: TextStyle(
-                color: c.fg, fontSize: 14, fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
-}

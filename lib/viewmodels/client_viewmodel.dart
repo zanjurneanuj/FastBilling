@@ -9,6 +9,7 @@ class ClientsViewModel extends ChangeNotifier {
 
   List<ClientItem> clients = [];
   bool isLoading = false;
+  String? errorMsg;
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -20,6 +21,7 @@ class ClientsViewModel extends ChangeNotifier {
 
   Future<void> loadClients() async {
     isLoading = true;
+    errorMsg = null;
     notifyListeners();
 
     try {
@@ -29,11 +31,29 @@ class ClientsViewModel extends ChangeNotifier {
           snapshot.docs.map((d) => ClientItem.fromMap(d.id, d.data())).toList();
     } catch (e) {
       debugPrint('Error loading clients: $e');
+      errorMsg = 'Could not load clients. Please try again.';
       clients = [];
     }
 
     isLoading = false;
     notifyListeners();
+  }
+
+  /// Looks up a client by id from the already-loaded list, falling back to
+  /// a direct Firestore read (e.g. after a deep link straight to a client's
+  /// detail page before the list has loaded).
+  Future<ClientItem?> getClient(String id) async {
+    for (final c in clients) {
+      if (c.id == id) return c;
+    }
+    try {
+      final doc = await _clientsRef.doc(id).get();
+      if (!doc.exists || doc.data() == null) return null;
+      return ClientItem.fromMap(doc.id, doc.data()!);
+    } catch (e) {
+      debugPrint('Error fetching client $id: $e');
+      return null;
+    }
   }
 
   Future<void> addClient({
@@ -51,6 +71,7 @@ class ClientsViewModel extends ChangeNotifier {
     );
 
     clients = [newClient, ...clients]; // optimistic UI
+    errorMsg = null;
     notifyListeners();
 
     try {
@@ -63,6 +84,7 @@ class ClientsViewModel extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Error adding client: $e');
+      errorMsg = 'Could not save this client. Please try again.';
       clients = clients.where((c) => c.id != newClient.id).toList();
       notifyListeners();
     }
@@ -71,12 +93,14 @@ class ClientsViewModel extends ChangeNotifier {
   Future<void> deleteClient(String id) async {
     final prev = clients;
     clients = clients.where((c) => c.id != id).toList();
+    errorMsg = null;
     notifyListeners();
 
     try {
       await _clientsRef.doc(id).delete();
     } catch (e) {
       debugPrint('Error deleting client: $e');
+      errorMsg = 'Could not delete this client. Please try again.';
       clients = prev; // rollback
       notifyListeners();
     }

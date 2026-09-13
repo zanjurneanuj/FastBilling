@@ -168,7 +168,10 @@ final GoRouter _router = GoRouter(
     GoRoute(path: '/onboarding',      builder: (c, s) => const OnboardingView()),
     GoRoute(path: '/home',            builder: (c, s) => const HomeView()),
     GoRoute(path: '/invoices',        builder: (c, s) => const InvoiceListView()),
-    GoRoute(path: '/invoices/create', builder: (c, s) => const InvoiceCreateView()),
+    GoRoute(
+      path: '/invoices/create',
+      builder: (c, s) => InvoiceCreateView(editInvoiceId: s.extra as String?),
+    ),
     GoRoute(
       path: '/invoices/:id/preview',
       builder: (c, s) => InvoicePreviewView(invoiceId: s.pathParameters['id']!),

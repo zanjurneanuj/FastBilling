@@ -33,12 +33,24 @@ class LineItem {
 }
 
 class InvoiceCreateViewModel extends ChangeNotifier {
+  InvoiceCreateViewModel({String? editInvoiceId}) {
+    if (editInvoiceId != null) {
+      isEditing = true;
+      invoiceNumber = editInvoiceId;
+      _loadForEdit(editInvoiceId);
+    }
+  }
+
   final _firestore = FirebaseFirestore.instance;
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   // ── Invoice meta ──────────────────────────────────────────────────────────
   String invoiceNumber = _generateInvoiceNumber();
   DateTime dueDate     = DateTime.now().add(const Duration(days: 30));
+
+  // ── Editing an existing invoice instead of creating a new one ─────────────
+  bool isEditing        = false;
+  bool isLoadingExisting = false;
 
   // ── Client ────────────────────────────────────────────────────────────────
   String? clientId;
@@ -57,6 +69,56 @@ class InvoiceCreateViewModel extends ChangeNotifier {
   bool   isSaving     = false;
   bool   isDraftSaved = false;
   String? errorMsg;
+
+  Future<void> _loadForEdit(String id) async {
+    final uid = _uid;
+    if (uid == null) return;
+
+    isLoadingExisting = true;
+    notifyListeners();
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('invoices')
+          .doc(id)
+          .get();
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        invoiceNumber = (data['invoiceNumber'] as String?) ?? id;
+        clientId = data['clientId'] as String?;
+        clientName = data['clientName'] as String?;
+        clientEmail = data['clientEmail'] as String?;
+
+        final due = (data['dueDate'] as Timestamp?)?.toDate();
+        if (due != null) dueDate = due;
+
+        gstPercent = (data['gstPercent'] as num?)?.toDouble() ?? gstPercent;
+        discountAmt = (data['discountAmt'] as num?)?.toDouble() ?? discountAmt;
+
+        final rawItems = data['items'] as List<dynamic>? ?? [];
+        items = rawItems.asMap().entries.map((entry) {
+          final m = Map<String, dynamic>.from(entry.value as Map);
+          return LineItem(
+            id: '${DateTime.now().millisecondsSinceEpoch}_${entry.key}',
+            name: m['name'] as String? ?? '',
+            qty: (m['qty'] as num?)?.toDouble() ?? 1,
+            rate: (m['rate'] as num?)?.toDouble() ?? 0,
+          );
+        }).toList();
+      } else {
+        errorMsg = 'Could not find this invoice.';
+      }
+    } catch (e) {
+      debugPrint('Error loading invoice for edit: $e');
+      errorMsg = 'Could not load invoice for editing.';
+    }
+
+    isLoadingExisting = false;
+    notifyListeners();
+  }
 
   // ── Computed ──────────────────────────────────────────────────────────────
   double get subtotal  => items.fold(0, (s, i) => s + i.total);
@@ -138,7 +200,10 @@ class InvoiceCreateViewModel extends ChangeNotifier {
     'gstAmt': gstAmt,
     'grandTotal': grandTotal,
     'status': status, // 'draft' | 'sent'
-    'createdAt': FieldValue.serverTimestamp(),
+    // Only stamp createdAt for brand-new invoices — editing an existing one
+    // must not bump it, since it drives "recent invoices" / monthly-revenue
+    // ordering everywhere else in the app.
+    if (!isEditing) 'createdAt': FieldValue.serverTimestamp(),
   };
 
   // ── Save ──────────────────────────────────────────────────────────────────

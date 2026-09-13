@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/InvoiceListItem.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/invoice_status.dart';
+import '../../viewmodels/invoice_list_viewmodel.dart';
+import '../widgets/client_avatar.dart';
 import '../widgets/empty_state.dart';
 
 /// Public entry point for the /invoices route.
@@ -41,7 +44,6 @@ class _InvoiceListScreen extends StatefulWidget {
 
 class _InvoiceListScreenState extends State<_InvoiceListScreen> {
   final _searchCtrl = TextEditingController();
-  String _selectedFilter = 'All';
 
   static const _filters = ['All', 'Draft', 'Sent', 'Paid', 'Overdue'];
 
@@ -63,7 +65,7 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
   Widget build(BuildContext context) {
     return Consumer<InvoiceListViewModel>(
       builder: (context, vm, _) {
-        final filtered = _applyFilter(vm.invoices);
+        final filtered = vm.filteredInvoices;
 
         return Scaffold(
           backgroundColor: AppColors.background(context),
@@ -96,7 +98,7 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                   child: TextField(
                     controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: vm.setSearchQuery,
                     style: TextStyle(
                         color: AppColors.textPrimary(context), fontSize: 14),
                     decoration: InputDecoration(
@@ -139,9 +141,9 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (_, i) {
                       final f = _filters[i];
-                      final selected = _selectedFilter == f;
+                      final selected = vm.selectedFilter == f;
                       return GestureDetector(
-                        onTap: () => setState(() => _selectedFilter = f),
+                        onTap: () => vm.setFilter(f),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
                           padding: const EdgeInsets.symmetric(
@@ -180,9 +182,9 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
                       : filtered.isEmpty
                       ? EmptyState(
                     icon: Icons.receipt_long_outlined,
-                    title: _selectedFilter == 'All'
+                    title: vm.selectedFilter == 'All'
                         ? 'No invoices yet'
-                        : 'No $_selectedFilter invoices',
+                        : 'No ${vm.selectedFilter} invoices',
                     subtitle: 'Tap + New to create one.',
                   )
                       : RefreshIndicator(
@@ -220,74 +222,75 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
     );
   }
 
-  // Filter + search combined
-  List<InvoiceListItem> _applyFilter(List<InvoiceListItem> all) {
-    var list = all;
-    if (_selectedFilter != 'All') {
-      list = list
-          .where((inv) =>
-      inv.status.toLowerCase() == _selectedFilter.toLowerCase())
-          .toList();
-    }
-    final q = _searchCtrl.text.trim().toLowerCase();
-    if (q.isNotEmpty) {
-      list = list
-          .where((inv) =>
-      inv.clientName.toLowerCase().contains(q) ||
-          inv.invoiceNumber.toLowerCase().contains(q))
-          .toList();
-    }
-    return list;
-  }
-
   void _showFilterSheet(BuildContext context, InvoiceListViewModel vm) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface(context),
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: AppColors.border(context),
-                      borderRadius: BorderRadius.circular(2)),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: AppColors.border(context),
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text('Sort & Filter',
-                  style: TextStyle(
-                      color: AppColors.textPrimary(context),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17)),
-              const SizedBox(height: 16),
-              Text('Sort by',
-                  style: TextStyle(
-                      color: AppColors.textSecondary(context), fontSize: 13)),
-              const SizedBox(height: 10),
-              Wrap(spacing: 8, children: [
-                _SheetChip(label: 'Newest first', selected: true, onTap: () {}),
-                _SheetChip(
-                    label: 'Oldest first', selected: false, onTap: () {}),
-                _SheetChip(label: 'Amount ↑', selected: false, onTap: () {}),
-                _SheetChip(label: 'Amount ↓', selected: false, onTap: () {}),
+                const SizedBox(height: 16),
+                Text('Sort & Filter',
+                    style: TextStyle(
+                        color: AppColors.textPrimary(context),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17)),
+                const SizedBox(height: 16),
+                Text('Sort by',
+                    style: TextStyle(
+                        color: AppColors.textSecondary(context), fontSize: 13)),
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, children: [
+                  _SheetChip(
+                    label: 'Newest first',
+                    selected: vm.sort == InvoiceSort.newest,
+                    onTap: () => setSheetState(
+                        () => vm.setSort(InvoiceSort.newest)),
+                  ),
+                  _SheetChip(
+                    label: 'Oldest first',
+                    selected: vm.sort == InvoiceSort.oldest,
+                    onTap: () => setSheetState(
+                        () => vm.setSort(InvoiceSort.oldest)),
+                  ),
+                  _SheetChip(
+                    label: 'Amount ↑',
+                    selected: vm.sort == InvoiceSort.amountAsc,
+                    onTap: () => setSheetState(
+                        () => vm.setSort(InvoiceSort.amountAsc)),
+                  ),
+                  _SheetChip(
+                    label: 'Amount ↓',
+                    selected: vm.sort == InvoiceSort.amountDesc,
+                    onTap: () => setSheetState(
+                        () => vm.setSort(InvoiceSort.amountDesc)),
+                  ),
+                ]),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Apply'),
+                  ),
+                ),
               ]),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Apply'),
-                ),
-              ),
-            ]),
+        ),
       ),
     );
   }
@@ -313,7 +316,7 @@ class _InvoiceRow extends StatelessWidget {
         ),
         child: Row(children: [
           // Avatar
-          _ClientAvatar(name: invoice.clientName),
+          ClientAvatar(name: invoice.clientName),
           const SizedBox(width: 12),
 
           // Name + invoice number
@@ -357,50 +360,6 @@ class _InvoiceRow extends StatelessWidget {
   }
 }
 
-// ─── Client Avatar ──────────────────────────────────────────────────────────
-
-class _ClientAvatar extends StatelessWidget {
-  const _ClientAvatar({required this.name});
-  final String name;
-
-  // Deterministic pastel color from initials
-  static const _palettes = [
-    (bg: Color(0xFFE8E4FF), fg: Color(0xFF6C5CE7)), // purple
-    (bg: Color(0xFFE0F4FF), fg: Color(0xFF0984E3)), // blue
-    (bg: Color(0xFFFFE8E8), fg: Color(0xFFE17055)), // red
-    (bg: Color(0xFFE8FFE8), fg: Color(0xFF00B894)), // green
-    (bg: Color(0xFFFFF3E0), fg: Color(0xFFF39C12)), // amber
-    (bg: Color(0xFFFFE4F3), fg: Color(0xFFE84393)), // pink
-  ];
-
-  String get _initials {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
-  }
-
-  ({Color bg, Color fg}) get _color {
-    final idx = name.codeUnits.fold(0, (a, b) => a + b) % _palettes.length;
-    return _palettes[idx];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _color;
-    return Container(
-      width: 42,
-      height: 42,
-      decoration:
-      BoxDecoration(color: c.bg, borderRadius: BorderRadius.circular(12)),
-      child: Center(
-        child: Text(_initials,
-            style: TextStyle(
-                color: c.fg, fontSize: 14, fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
-}
-
 // ─── Status Badge ────────────────────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
@@ -409,34 +368,12 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = status.toLowerCase();
-    final Color bg;
-    final Color fg;
-
-    switch (s) {
-      case 'paid':
-        bg = const Color(0xFFE8FBF0);
-        fg = const Color(0xFF00B894);
-        break;
-      case 'overdue':
-        bg = const Color(0xFFFFECEC);
-        fg = AppColors.error;
-        break;
-      case 'sent':
-        bg = const Color(0xFFE8F4FF);
-        fg = const Color(0xFF0984E3);
-        break;
-      case 'draft':
-      default:
-        bg = AppColors.border(context);
-        fg = AppColors.textSecondary(context);
-    }
-
+    final (bg, fg) = InvoiceStatus.badgeColors(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration:
       BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(status,
+      child: Text(InvoiceStatus.label(status),
           style:
           TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
     );

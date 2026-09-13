@@ -9,12 +9,13 @@ import '../../viewmodels/client_viewmodel.dart';
 import '../../viewmodels/invoice_viewmodel.dart';
 
 class InvoiceCreateView extends StatelessWidget {
-  const InvoiceCreateView({super.key});
+  const InvoiceCreateView({super.key, this.editInvoiceId});
+  final String? editInvoiceId;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => InvoiceCreateViewModel(),
+      create: (_) => InvoiceCreateViewModel(editInvoiceId: editInvoiceId),
       child: const _InvoiceCreateBody(),
     );
   }
@@ -45,7 +46,7 @@ class _InvoiceCreateBody extends StatelessWidget {
               },
             ),
             title: Text(
-              'New Invoice',
+              vm.isEditing ? 'Edit Invoice' : 'New Invoice',
               style: TextStyle(
                 color: AppColors.textPrimary(context),
                 fontSize: 17,
@@ -76,7 +77,10 @@ class _InvoiceCreateBody extends StatelessWidget {
             ],
           ),
 
-          body: Column(
+          body: vm.isLoadingExisting
+              ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
+              : Column(
             children: [
               // ── Scrollable form ──────────────────────────────────────────
               Expanded(
