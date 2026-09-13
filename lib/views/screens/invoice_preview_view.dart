@@ -1,12 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/PosPrinter.dart';
 import '../../services/PdfTemplateService.dart';
+import '../../services/PosPrinterService.dart';
+import '../../services/pdf_service.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/invoice_status.dart';
 import '../../viewmodels/InvoicePreviewViewModel.dart';
 import '../widgets/empty_state.dart';
+import 'PrintReceiptPreviewView.dart';
+
+// ─── PDF / print actions ────────────────────────────────────────────────────
+// Shared by the top-bar print icon and the bottom-bar PDF/Share buttons.
+
+Future<void> _printPdf(BuildContext context, InvoicePreviewViewModel vm) async {
+  final inv = vm.invoice;
+  if (inv == null) return;
+  final doc = await PdfService.buildInvoicePdf(inv, vm.activeTemplate);
+  await Printing.layoutPdf(onLayout: (_) => doc.save());
+}
+
+Future<void> _sharePdf(BuildContext context, InvoicePreviewViewModel vm) async {
+  final inv = vm.invoice;
+  if (inv == null) return;
+  final doc = await PdfService.buildInvoicePdf(inv, vm.activeTemplate);
+  final bytes = await doc.save();
+  await Printing.sharePdf(bytes: bytes, filename: '${inv.invoiceNumber}.pdf');
+}
+
+void _printReceiptPos(BuildContext context, InvoicePreviewViewModel vm) {
+  final inv = vm.invoice;
+  if (inv == null) return;
+
+  if (!PosPrinterService.isConnected) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Connect a printer in Settings first.')));
+    return;
+  }
+
+  Navigator.of(context).push(MaterialPageRoute(
+    builder: (_) => PrintReceiptPreviewView(
+      businessName: inv.senderName.isEmpty ? 'Business' : inv.senderName,
+      businessSub: inv.senderAddress,
+      invoiceNo: inv.invoiceNumber,
+      date: inv.issuedDate,
+      billTo: inv.clientName,
+      items: inv.items
+          .map((i) => PosReceiptLine(name: i.name, qty: i.qty, rate: i.rate))
+          .toList(),
+      subtotal: inv.subtotal,
+      gstAmt: inv.gstAmt,
+      total: inv.grandTotal,
+      gstPercent: inv.gstPercent,
+    ),
+  ));
+}
 
 class InvoicePreviewView extends StatefulWidget {
   const InvoicePreviewView({super.key, required this.invoiceId});
@@ -50,7 +101,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
               IconButton(
                 icon: Icon(Icons.print_outlined,
                     color: AppColors.textPrimary(context)),
-                onPressed: () {},
+                onPressed: () => _printPdf(context, vm),
               ),
               IconButton(
                 icon: Icon(Icons.more_vert_rounded,
@@ -133,6 +184,14 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             onTap: () {
               Navigator.pop(context);
               context.push('/settings/pdf-template');
+            },
+          ),
+          _SheetTile(
+            icon: Icons.point_of_sale_outlined,
+            label: 'Print receipt (POS)',
+            onTap: () {
+              Navigator.pop(context);
+              _printReceiptPos(context, vm);
             },
           ),
           _SheetTile(
@@ -579,7 +638,7 @@ class _BottomBar extends StatelessWidget {
         _ActionBtn(
           icon: Icons.download_outlined,
           label: 'PDF',
-          onTap: () {},
+          onTap: () => _printPdf(context, vm),
         ),
         const SizedBox(width: 10),
         _ActionBtn(
@@ -599,7 +658,7 @@ class _BottomBar extends StatelessWidget {
         Expanded(
           flex: 2,
           child: ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => _sharePdf(context, vm),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               minimumSize: const Size(0, 52),

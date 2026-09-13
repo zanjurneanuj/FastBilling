@@ -9,7 +9,6 @@ import '../../services/PosPrinterService.dart';
 import '../../services/ProfileService.dart';
 import '../../services/auth_service.dart';
 import '../../models/PdfTemplate.dart';
-import '../../models/PosPrinter.dart';
 import '../../utils/app_colors.dart';
 import '../../viewmodels/settings_viewmodel.dart';
 import 'PdfTemplateCard.dart';
@@ -27,9 +26,6 @@ class _SettingsViewState extends State<SettingsView>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-
-  bool _cloudBackup = true;
-  bool _appLock     = false;
 
   @override
   void initState() {
@@ -84,6 +80,7 @@ class _SettingsViewState extends State<SettingsView>
   Widget build(BuildContext context) {
     super.build(context);
     final themeProvider = context.watch<ThemeProvider>();
+    final localeProvider = context.watch<LocaleProvider>();
     final vm = context.watch<SettingsViewModel>();
 
     final themeLabel = switch (themeProvider.themeMode) {
@@ -168,8 +165,8 @@ class _SettingsViewState extends State<SettingsView>
                 _SettingsTile(
                     icon: Icons.cloud_sync_outlined,
                     label: 'Cloud backup',
-                    subLabel: _cloudBackup ? 'Last synced 2h ago' : 'Off',
-                    subLabelColor: _cloudBackup
+                    subLabel: vm.cloudBackup ? 'Last synced 2h ago' : 'Off',
+                    subLabelColor: vm.cloudBackup
                         ? AppColors.primary
                         : AppColors.textSecondary(context),
                     trailing: Switch(
@@ -200,9 +197,9 @@ class _SettingsViewState extends State<SettingsView>
                 _SettingsTile(
                   icon: Icons.language_rounded,
                   label: 'Language',
-                  trailingText: 'English',
+                  trailingText: localeProvider.current.label,
                   showChevron: true,
-                  onTap: () => _showLanguagePicker(context),
+                  onTap: () => _showLanguagePicker(context, localeProvider),
                 ),
               ]),
               const SizedBox(height: 20),
@@ -303,10 +300,17 @@ class _SettingsViewState extends State<SettingsView>
                 trailing: _currency == c
                     ? const Icon(Icons.check_rounded, color: AppColors.primary)
                     : null,
-                onTap: () {
-                  // TODO: persist currency change via ProfileService
+                onTap: () async {
                   Navigator.pop(context);
-                  setState(() {});
+                  final p = ProfileService.cached;
+                  if (p == null) return;
+                  await ProfileService.save(
+                    name: p.name,
+                    address: p.address,
+                    gstNumber: p.gstNumber,
+                    currency: c,
+                  );
+                  if (mounted) setState(() {});
                 },
               )),
             ]),
@@ -314,7 +318,7 @@ class _SettingsViewState extends State<SettingsView>
     );
   }
 
-  void _showLanguagePicker(BuildContext context) {
+  void _showLanguagePicker(BuildContext context, LocaleProvider localeProvider) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface(context),
@@ -333,14 +337,17 @@ class _SettingsViewState extends State<SettingsView>
                       fontWeight: FontWeight.w700,
                       fontSize: 17)),
               const SizedBox(height: 12),
-              ...['English', 'Hindi', 'Marathi'].map((lang) => ListTile(
+              ...AppLocale.values.map((lang) => ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(lang,
+                title: Text(lang.label,
                     style: TextStyle(color: AppColors.textPrimary(context))),
-                trailing: lang == 'English'
+                trailing: localeProvider.current == lang
                     ? const Icon(Icons.check_rounded, color: AppColors.primary)
                     : null,
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  localeProvider.setLocale(lang);
+                  Navigator.pop(context);
+                },
               )),
             ]),
       ),

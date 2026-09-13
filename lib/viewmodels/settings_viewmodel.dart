@@ -2,8 +2,24 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../services/ProfileService.dart';
+import '../services/local_db_service.dart';
 
 class SettingsViewModel extends ChangeNotifier {
+  static const _cloudBackupKey = 'settings_cloud_backup';
+  static const _appLockKey = 'settings_app_lock';
+
+  SettingsViewModel() {
+    _restore();
+  }
+
+  Future<void> _restore() async {
+    final backup = await LocalDbService.instance.getSetting(_cloudBackupKey);
+    final lock = await LocalDbService.instance.getSetting(_appLockKey);
+    if (backup != null) cloudBackup = backup == 'true';
+    if (lock != null) appLock = lock == 'true';
+    notifyListeners();
+  }
+
   // ── Read-only getters from existing services ──────────────────────────────
   // Settings doesn't own data — it reads ProfileService + ThemeProvider.
   // Add state here only when a setting needs local persistence.
@@ -19,7 +35,7 @@ class SettingsViewModel extends ChangeNotifier {
     if (p.gstNumber != null && p.gstNumber!.isNotEmpty) {
       return 'GST: ${p.gstNumber}';
     }
-    return p.address ?? '';
+    return p.address;
   }
 
   String get currency => ProfileService.cached?.currency ?? 'INR';
@@ -37,13 +53,13 @@ class SettingsViewModel extends ChangeNotifier {
   void toggleCloudBackup(bool v) {
     cloudBackup = v;
     notifyListeners();
-    // TODO: persist to local prefs
+    LocalDbService.instance.saveSetting(_cloudBackupKey, v.toString());
   }
 
   void toggleAppLock(bool v) {
     appLock = v;
     notifyListeners();
-    // TODO: persist to local prefs
+    LocalDbService.instance.saveSetting(_appLockKey, v.toString());
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────
