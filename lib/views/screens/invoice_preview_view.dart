@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/PdfTemplate.dart';
 import '../../services/PdfTemplateService.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/invoice_status.dart';
 import '../../viewmodels/InvoicePreviewViewModel.dart';
+import '../widgets/empty_state.dart';
 
 class InvoicePreviewView extends StatefulWidget {
   const InvoicePreviewView({super.key, required this.invoiceId});
@@ -28,46 +29,75 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
   Widget build(BuildContext context) {
     return Consumer<InvoicePreviewViewModel>(
       builder: (context, vm, _) {
+        final hasInvoice = vm.invoice != null;
         return Scaffold(
-          backgroundColor: const Color(0xFF1E1E2E),
+          backgroundColor: AppColors.background(context),
           appBar: AppBar(
-            backgroundColor: const Color(0xFF1E1E2E),
+            backgroundColor: AppColors.surface(context),
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+              icon: Icon(Icons.arrow_back_rounded,
+                  color: AppColors.textPrimary(context)),
               onPressed: () => context.pop(),
             ),
-            title: const Text('Preview',
+            title: Text('Preview',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary(context),
                     fontSize: 17,
                     fontWeight: FontWeight.w600)),
-            actions: [
+            actions: hasInvoice
+                ? [
               IconButton(
-                icon: const Icon(Icons.print_outlined, color: Colors.white),
+                icon: Icon(Icons.print_outlined,
+                    color: AppColors.textPrimary(context)),
                 onPressed: () {},
               ),
               IconButton(
-                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                icon: Icon(Icons.more_vert_rounded,
+                    color: AppColors.textPrimary(context)),
                 onPressed: () => _showMoreSheet(context, vm),
               ),
-            ],
+            ]
+                : null,
           ),
-          body: vm.isLoading
-              ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
-              : Column(children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                child: _InvoiceCard(vm: vm),
-              ),
-            ),
-            _BottomBar(vm: vm),
-          ]),
+          body: _buildBody(context, vm),
         );
       },
     );
+  }
+
+  Widget _buildBody(BuildContext context, InvoicePreviewViewModel vm) {
+    if (vm.isLoading) {
+      return const Center(
+          child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    if (vm.notFound) {
+      return EmptyState(
+        icon: Icons.receipt_long_outlined,
+        title: 'Invoice not found',
+        subtitle: 'This invoice may have been deleted.',
+        actionLabel: 'Back to invoices',
+        onAction: () => context.go('/invoices'),
+      );
+    }
+    if (vm.invoice == null) {
+      return EmptyState(
+        icon: Icons.error_outline_rounded,
+        title: 'Could not load invoice',
+        subtitle: vm.errorMsg ?? 'Please try again.',
+        actionLabel: 'Retry',
+        onAction: () => vm.load(widget.invoiceId),
+      );
+    }
+    return Column(children: [
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: _InvoiceCard(vm: vm),
+        ),
+      ),
+      _BottomBar(vm: vm),
+    ]);
   }
 
   void _showMoreSheet(BuildContext context, InvoicePreviewViewModel vm) {
@@ -94,7 +124,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             label: 'Edit invoice',
             onTap: () {
               Navigator.pop(context);
-              context.go('/invoices/create');
+              context.go('/invoices/create', extra: vm.invoice?.id);
             },
           ),
           _SheetTile(
@@ -108,7 +138,17 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
           _SheetTile(
             icon: Icons.content_copy_outlined,
             label: 'Duplicate',
-            onTap: () => Navigator.pop(context),
+            onTap: () async {
+              Navigator.pop(context);
+              final newId = await vm.duplicateInvoice();
+              if (!context.mounted) return;
+              if (newId != null) {
+                context.go('/invoices/$newId/preview');
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(vm.errorMsg ?? 'Could not duplicate invoice.')));
+              }
+            },
           ),
           _SheetTile(
             icon: Icons.delete_outline_rounded,
@@ -116,7 +156,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             color: AppColors.error,
             onTap: () {
               Navigator.pop(context);
-              _confirmDelete(context);
+              _confirmDelete(context, vm);
             },
           ),
         ]),
@@ -124,7 +164,7 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
     );
   }
 
-  void _confirmDelete(BuildContext context) {
+  void _confirmDelete(BuildContext context, InvoicePreviewViewModel vm) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -143,9 +183,16 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
                 style: TextStyle(color: AppColors.textSecondary(context))),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              context.pop();
+              final ok = await vm.deleteInvoice();
+              if (!context.mounted) return;
+              if (ok) {
+                context.go('/invoices');
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(vm.errorMsg ?? 'Could not delete invoice.')));
+              }
             },
             child: const Text('Delete',
                 style: TextStyle(
@@ -461,26 +508,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = status.toLowerCase();
-    final Color bg;
-    final Color fg;
-    switch (s) {
-      case 'paid':
-        bg = const Color(0xFFE8FBF0);
-        fg = const Color(0xFF00B894);
-        break;
-      case 'overdue':
-        bg = const Color(0xFFFFECEC);
-        fg = AppColors.error;
-        break;
-      case 'sent':
-        bg = const Color(0xFFE8F4FF);
-        fg = const Color(0xFF0984E3);
-        break;
-      default:
-        bg = const Color(0xFFF0F0F0);
-        fg = const Color(0xFF888888);
-    }
+    final (bg, fg) = InvoiceStatus.badgeColors(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration:
@@ -543,9 +571,9 @@ class _BottomBar extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(
           20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1E1E2E),
-        border: Border(top: BorderSide(color: Color(0xFF2E2E3E))),
+      decoration: BoxDecoration(
+        color: AppColors.surface(context),
+        border: Border(top: BorderSide(color: AppColors.border(context))),
       ),
       child: Row(children: [
         _ActionBtn(
@@ -612,17 +640,18 @@ class _ActionBtn extends StatelessWidget {
       width: 70,
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A3E),
+        color: AppColors.background(context),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: iconColor ?? Colors.white70, size: 20),
+          Icon(icon,
+              color: iconColor ?? AppColors.textSecondary(context), size: 20),
           const SizedBox(height: 3),
           Text(label,
               style: TextStyle(
-                  color: labelColor ?? Colors.white70,
+                  color: labelColor ?? AppColors.textSecondary(context),
                   fontSize: 11,
                   fontWeight: FontWeight.w500)),
         ],
