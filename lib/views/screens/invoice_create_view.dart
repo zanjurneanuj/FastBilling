@@ -317,7 +317,7 @@ class _ClientPicker extends StatelessWidget {
   }
 
   void _showClientSheet(BuildContext context, InvoiceCreateViewModel vm) {
-    final clients = context.read<ClientsViewModel>().clients;
+    final clientsVm = context.read<ClientsViewModel>();
 
     showModalBottomSheet(
       context: context,
@@ -326,84 +326,249 @@ class _ClientPicker extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => DraggableScrollableSheet(
+      builder: (sheetContext) => DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.4,
         maxChildSize: 0.9,
         expand: false,
-        builder: (_, ctrl) => Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-          child: Column(
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.border(context),
-                    borderRadius: BorderRadius.circular(2),
+        builder: (_, ctrl) => StatefulBuilder(
+          builder: (context, setSheetState) {
+            final clients = clientsVm.clients;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border(context),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Select Client',
-                style: TextStyle(
-                  color: AppColors.textPrimary(context),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: clients.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No clients yet.',
-                          style: TextStyle(
-                            color: AppColors.textSecondary(context),
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        controller: ctrl,
-                        itemCount: clients.length,
-                        separatorBuilder: (_, __) => Divider(
-                          color: AppColors.border(context),
-                          height: 1,
-                        ),
-                        itemBuilder: (_, i) {
-                          final c = clients[i];
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: _Avatar(name: c.name),
-                            title: Text(
-                              c.name,
-                              style: TextStyle(
-                                color: AppColors.textPrimary(context),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              c.email,
+                  const SizedBox(height: 14),
+                  Text(
+                    'Select Client',
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.person_add_alt_1_rounded,
+                          color: AppColors.primary, size: 20),
+                    ),
+                    title: Text(
+                      'Add new client',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () => _showAddClientSheet(
+                      context,
+                      vm,
+                      clientsVm,
+                      onAdded: () => setSheetState(() {}),
+                    ),
+                  ),
+                  Divider(color: AppColors.border(context), height: 1),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: clients.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No clients yet — add one above.',
                               style: TextStyle(
                                 color: AppColors.textSecondary(context),
-                                fontSize: 12,
                               ),
                             ),
-                            onTap: () {
-                              vm.setClient(
-                                id: c.id,
-                                name: c.name,
-                                email: c.email,
+                          )
+                        : ListView.separated(
+                            controller: ctrl,
+                            itemCount: clients.length,
+                            separatorBuilder: (_, __) => Divider(
+                              color: AppColors.border(context),
+                              height: 1,
+                            ),
+                            itemBuilder: (_, i) {
+                              final c = clients[i];
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: _Avatar(name: c.name),
+                                title: Text(
+                                  c.name,
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary(context),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  c.email,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary(context),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                onTap: () {
+                                  vm.setClient(
+                                    id: c.id,
+                                    name: c.name,
+                                    email: c.email,
+                                  );
+                                  Navigator.pop(sheetContext);
+                                },
                               );
-                              Navigator.pop(context);
                             },
-                          );
-                        },
-                      ),
+                          ),
+                  ),
+                ],
               ),
-            ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Inline "add client" form layered on top of the client picker — saves
+  /// via the same ClientsViewModel the standalone Clients screen uses, then
+  /// immediately selects the new client for this invoice.
+  void _showAddClientSheet(
+    BuildContext context,
+    InvoiceCreateViewModel vm,
+    ClientsViewModel clientsVm, {
+    required VoidCallback onAdded,
+  }) {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 16, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 32),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: AppColors.border(sheetContext),
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text('New Client',
+                    style: TextStyle(
+                        color: AppColors.textPrimary(sheetContext),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18)),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: nameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Business name *'),
+                  validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email *'),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
+                      return 'Enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone · optional'),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setModalState(() => saving = true);
+                      final name = nameCtrl.text.trim();
+                      final email = emailCtrl.text.trim();
+                      await clientsVm.addClient(
+                        name: name,
+                        email: email,
+                        phone: phoneCtrl.text.trim(),
+                      );
+
+                      if (clientsVm.errorMsg != null) {
+                        setModalState(() => saving = false);
+                        if (sheetContext.mounted) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              SnackBar(content: Text(clientsVm.errorMsg!)));
+                        }
+                        return;
+                      }
+
+                      final newClient = clientsVm.clients
+                          .firstWhere((c) => c.name == name && c.email == email);
+                      vm.setClient(
+                        id: newClient.id,
+                        name: newClient.name,
+                        email: newClient.email,
+                      );
+                      onAdded();
+                      if (sheetContext.mounted) {
+                        Navigator.pop(sheetContext); // close add-client sheet
+                      }
+                      if (context.mounted) {
+                        Navigator.pop(context); // close client picker sheet
+                      }
+                    },
+                    child: saving
+                        ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white))
+                        : const Text('Save & select'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -444,8 +609,15 @@ class _LineItemRowState extends State<_LineItemRow> {
       text: widget.item.qty == 1 ? '1' : widget.item.qty.toStringAsFixed(0),
     );
     _rateCtrl = TextEditingController(
-      text: widget.item.rate == 0 ? '' : widget.item.rate.toStringAsFixed(0),
+      text: widget.item.rate == 0 ? '' : _trimTrailingZero(widget.item.rate),
     );
+  }
+
+  static String _trimTrailingZero(double v) {
+    if (v == v.roundToDouble()) return v.toStringAsFixed(0);
+    var s = v.toStringAsFixed(2);
+    if (s.endsWith('0')) s = s.substring(0, s.length - 1);
+    return s;
   }
 
   @override
@@ -618,8 +790,11 @@ class _LineItemRowState extends State<_LineItemRow> {
                       controller: _rateCtrl,
                       onChanged: (v) =>
                           widget.onChanged(rate: double.tryParse(v) ?? 0),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                      ],
                       style: TextStyle(
                         color: AppColors.primary,
                         fontSize: 13,
@@ -872,10 +1047,16 @@ class _TaxDiscountPanel extends StatelessWidget {
                       ),
                       SizedBox(
                         width: 100,
-                        child: TextField(
-                          keyboardType: TextInputType.number,
+                        child: TextFormField(
+                          key: ValueKey('discount-${vm.taxExpanded}'),
+                          initialValue: vm.discountAmt == 0
+                              ? ''
+                              : _trimTrailingZero(vm.discountAmt),
+                          keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
+                            FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*\.?\d{0,2}')),
                           ],
                           onChanged: (v) =>
                               vm.setDiscount(double.tryParse(v) ?? 0),
@@ -925,6 +1106,13 @@ class _TaxDiscountPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _trimTrailingZero(double v) {
+    if (v == v.roundToDouble()) return v.toStringAsFixed(0);
+    var s = v.toStringAsFixed(2);
+    if (s.endsWith('0')) s = s.substring(0, s.length - 1);
+    return s;
   }
 }
 

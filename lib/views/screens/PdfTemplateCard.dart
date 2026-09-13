@@ -81,6 +81,10 @@ class PdfTemplateCard extends StatelessWidget {
   }
 }
 
+/// A color-only swatch — not a fake invoice mockup. Real layout/content can
+/// only be seen in the actual generated PDF (Settings > PDF template opens
+/// a live preview of the real thing), so this card doesn't pretend to
+/// render invoice text it isn't actually laying out.
 class _MiniInvoicePreview extends StatelessWidget {
   const _MiniInvoicePreview({required this.template});
   final PdfTemplate template;
@@ -96,39 +100,23 @@ class _MiniInvoicePreview extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      alignment: Alignment.center,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('INVOICE',
-                  style: TextStyle(
-                      color: textColor,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5)),
-              Container(
-                width: 8, height: 8,
-                decoration: BoxDecoration(
-                    color: template.accentColor, shape: BoxShape.circle),
-              ),
-            ],
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+                color: template.accentColor, shape: BoxShape.circle),
           ),
-          const Spacer(),
-          for (final w in [1.0, 0.7, 0.5]) ...[
-            Container(
-              margin: const EdgeInsets.only(top: 3),
-              height: 3,
-              width: 60 * w,
-              decoration: BoxDecoration(
-                color: (template.darkHeader ? Colors.white : Colors.black)
-                    .withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ],
+          const SizedBox(height: 6),
+          Text('INVOICE',
+              style: TextStyle(
+                  color: textColor,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1)),
         ],
       ),
     );
