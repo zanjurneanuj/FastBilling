@@ -1,22 +1,20 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
-// NOTE — packages needed for real hardware I/O (add to pubspec.yaml):
-//   esc_pos_utils_plus     → builds ESC/POS command bytes (text, columns, qr, cut)
-//   print_bluetooth_thermal (or flutter_bluetooth_serial) → Bluetooth transport
-//   usb_serial              → USB transport
-// WiFi/LAN printing needs no extra package — thermal printers on the same
-// network almost always listen on raw TCP port 9100, so dart:io Socket works.
-//
-// This service is written so each transport is isolated behind small private
-// methods (_connectBluetooth/_connectWifi/_connectUsb, _sendBytes). Swap the
-// TODO-marked bodies for real plugin calls once you've picked your packages —
-// nothing in the public API (scan/connect/printReceipt) needs to change.
+// ESC/POS byte generation (text, columns, qr, cut) — unchanged, still used
+// for every transport including the raw WiFi socket below.
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
+// Real Bluetooth Classic / BLE / USB transport. Imported under a prefix
+// because this package's PrinterConnectionType/PrinterDevice names collide
+// with this app's own models in ../models/PosPrinter.dart.
+import 'package:unified_esc_pos_printer/unified_esc_pos_printer.dart' as pkg;
+
 import '../models/PosPrinter.dart';
+import 'local_db_service.dart';
 
 class PosPrinterService {
   PosPrinterService._();
@@ -27,13 +25,58 @@ class PosPrinterService {
   static final ValueNotifier<int> changed = ValueNotifier<int>(0);
   static void _notify() => changed.value++;
 
+  static final pkg.PrinterManager _manager = pkg.PrinterManager();
+
   static PosPrinterDevice? connectedDevice;
   static PrinterConnectionStatus status = PrinterConnectionStatus.disconnected;
   static PosPrinterSettings settings = const PosPrinterSettings();
   static List<PosPrinterDevice> lastScanResults = [];
 
+  /// Package-side devices found by the last scan, keyed by the app's own
+  /// PosPrinterDevice.id, so connect() can hand the *exact* discovered
+  /// object back to PrinterManager (a BLE device especially can't be safely
+  /// reconstructed from just its id string).
+  static final Map<String, pkg.PrinterDevice> _discovered = {};
+
   static bool get isConnected =>
       status == PrinterConnectionStatus.connected && connectedDevice != null;
+
+  // ── Settings persistence ───────────────────────────────────────────────
+
+  static const _settingsKey = 'pos_printer_settings';
+
+  /// Call once at app startup (see main.dart) so `settings` reflects the
+  /// user's saved paper width / QR / auto-print choices before any printer
+  /// screen reads them.
+  static Future<void> loadSettings() async {
+    final raw = await LocalDbService.instance.getSetting(_settingsKey);
+    if (raw == null) return;
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      settings = PosPrinterSettings(
+        paperWidthMm: map['paperWidthMm'] as int? ?? settings.paperWidthMm,
+        printQrOrUpi: map['printQrOrUpi'] as bool? ?? settings.printQrOrUpi,
+        autoPrintOnPayment:
+        map['autoPrintOnPayment'] as bool? ?? settings.autoPrintOnPayment,
+      );
+      _notify();
+    } catch (e) {
+      debugPrint('[PosPrinter] failed to load saved settings: $e');
+    }
+  }
+
+  static void updateSettings(PosPrinterSettings s) {
+    settings = s;
+    _notify();
+    LocalDbService.instance.saveSetting(
+      _settingsKey,
+      jsonEncode({
+        'paperWidthMm': s.paperWidthMm,
+        'printQrOrUpi': s.printQrOrUpi,
+        'autoPrintOnPayment': s.autoPrintOnPayment,
+      }),
+    );
+  }
 
   // ── Scanning ────────────────────────────────────────────────────────────
 
@@ -49,24 +92,40 @@ class PosPrinterService {
   }
 
   static Future<List<PosPrinterDevice>> _scanBluetooth() async {
-    // TODO: replace with real discovery, e.g.:
-    //   final bonded = await FlutterBluetoothSerial.instance.getBondedDevices();
-    await Future.delayed(const Duration(milliseconds: 800));
-    lastScanResults = const [
-      PosPrinterDevice(
-        id: '00:11:22:AA:BB:CC',
-        name: 'Epson TM-T20 III',
+    _discovered.removeWhere((_, d) =>
+    d.connectionType == pkg.PrinterConnectionType.bluetooth ||
+        d.connectionType == pkg.PrinterConnectionType.ble);
+
+    final found = await _manager.scanPrinters(
+      types: const {
+        pkg.PrinterConnectionType.bluetooth, // Classic SPP — Android only
+        pkg.PrinterConnectionType.ble,       // BLE — Android/iOS/Windows
+      },
+    );
+
+    lastScanResults = found.map((d) {
+      final id = switch (d) {
+        pkg.BluetoothPrinterDevice() => d.address,
+        pkg.BlePrinterDevice() => d.deviceId,
+        _ => d.name,
+      };
+      _discovered[id] = d;
+      return PosPrinterDevice(
+        id: id,
+        name: d.name,
         type: PrinterConnectionType.bluetooth,
-        subtitle: 'Thermal 58mm',
-      ),
-    ];
+        subtitle: d is pkg.BlePrinterDevice ? 'Bluetooth LE' : 'Bluetooth',
+      );
+    }).toList();
+
     return lastScanResults;
   }
 
   static Future<List<PosPrinterDevice>> _scanWifi() async {
     // TODO: replace with real LAN discovery (mDNS, or a quick port-9100 sweep
     // across the subnet). Left as static entries here so the UI is testable
-    // without hardware.
+    // without hardware — thermal printers on the same network almost always
+    // listen on raw TCP port 9100, which _connectWifi below actually uses.
     await Future.delayed(const Duration(milliseconds: 800));
     lastScanResults = const [
       PosPrinterDevice(
@@ -86,16 +145,23 @@ class PosPrinterService {
   }
 
   static Future<List<PosPrinterDevice>> _scanUsb() async {
-    // TODO: replace with real USB device enumeration, e.g. usb_serial plugin.
-    await Future.delayed(const Duration(milliseconds: 500));
-    lastScanResults = const [
-      PosPrinterDevice(
-        id: 'usb:001',
-        name: 'Xprinter XP-80C',
+    _discovered
+        .removeWhere((_, d) => d.connectionType == pkg.PrinterConnectionType.usb);
+
+    final found = await _manager.scanPrinters(
+      types: const {pkg.PrinterConnectionType.usb},
+    );
+
+    lastScanResults = found.whereType<pkg.UsbPrinterDevice>().map((d) {
+      _discovered[d.identifier] = d;
+      return PosPrinterDevice(
+        id: d.identifier,
+        name: d.name,
         type: PrinterConnectionType.usb,
-        subtitle: 'USB · Thermal 80mm',
-      ),
-    ];
+        subtitle: 'USB',
+      );
+    }).toList();
+
     return lastScanResults;
   }
 
@@ -132,8 +198,11 @@ class PosPrinterService {
   static Socket? _wifiSocket;
 
   static Future<void> _connectBluetooth(PosPrinterDevice device) async {
-    // TODO: e.g. await PrintBluetoothThermal.connect(macPrinterAddress: device.id);
-    await Future.delayed(const Duration(milliseconds: 600));
+    final pkgDevice = _discovered[device.id];
+    if (pkgDevice == null) {
+      throw StateError('Bluetooth device ${device.id} was not in the last scan.');
+    }
+    await _manager.connect(pkgDevice);
   }
 
   static Future<void> _connectWifi(PosPrinterDevice device) async {
@@ -145,8 +214,11 @@ class PosPrinterService {
   }
 
   static Future<void> _connectUsb(PosPrinterDevice device) async {
-    // TODO: e.g. final port = await UsbSerial.create(vid, pid); await port.open();
-    await Future.delayed(const Duration(milliseconds: 400));
+    final pkgDevice = _discovered[device.id];
+    if (pkgDevice == null) {
+      throw StateError('USB device ${device.id} was not in the last scan.');
+    }
+    await _manager.connect(pkgDevice);
   }
 
   static Future<void> disconnect() async {
@@ -154,18 +226,14 @@ class PosPrinterService {
       await _wifiSocket?.close();
     } catch (_) {}
     _wifiSocket = null;
+
+    try {
+      await _manager.disconnect();
+    } catch (_) {}
+
     connectedDevice = null;
     status = PrinterConnectionStatus.disconnected;
     _notify();
-  }
-
-  // ── Settings ────────────────────────────────────────────────────────────
-
-  static void updateSettings(PosPrinterSettings s) {
-    settings = s;
-    _notify();
-    // TODO: persist to local storage (Hive/shared_prefs), same as your other
-    // app settings, so this survives app restarts.
   }
 
   // ── Printing ────────────────────────────────────────────────────────────
@@ -286,10 +354,8 @@ class PosPrinterService {
         await _wifiSocket?.flush();
         break;
       case PrinterConnectionType.bluetooth:
-      // TODO: e.g. await PrintBluetoothThermal.writeBytes(bytes);
-        break;
       case PrinterConnectionType.usb:
-      // TODO: e.g. await usbPort.write(Uint8List.fromList(bytes));
+        await _manager.printBytes(bytes);
         break;
     }
   }

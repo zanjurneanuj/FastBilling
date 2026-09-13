@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- POS receipt printer discovery (unified_esc_pos_printer): Bluetooth
+         Classic + BLE scanning, plus legacy location permission required for
+         BT scans on API 30 and below. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- USB thermal printer support -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
     <application
         android:label="fast_billing"
         android:name="${applicationName}"

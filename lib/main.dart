@@ -1,3 +1,4 @@
+import 'package:fast_billing/services/PosPrinterService.dart';
 import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/services/ProfileService.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -20,6 +21,7 @@ void main() async {
   // Hive init — registers adapters + opens boxes
   await HiveDB.init();
   if (AuthService.isLoggedIn) await ProfileService.load();
+  await PosPrinterService.loadSettings();
 
   runApp(
     MultiProvider(
