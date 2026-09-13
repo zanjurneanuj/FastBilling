@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 // ── Data model ────────────────────────────────────────────────────────────
@@ -15,25 +17,20 @@ class Product {
     required this.stock,
   });
 
-  factory Product.empty() => Product(id: '', name: '', price: 0, stock: 0);
-
-  factory Product.fromJson(Map<String, dynamic> json) {
+  factory Product.fromMap(String id, Map<String, dynamic> map) {
     return Product(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      price: (json['price'] as num?)?.toDouble() ?? 0,
-      stock: json['stock'] as int? ?? 0,
+      id: id,
+      name: map['name'] as String? ?? '',
+      price: (map['price'] as num?)?.toDouble() ?? 0,
+      stock: (map['stock'] as num?)?.toInt() ?? 0,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'price': price,
-      'stock': stock,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'price': price,
+    'stock': stock,
+  };
 
   Product copyWith({String? name, double? price, int? stock}) {
     return Product(
@@ -46,10 +43,12 @@ class Product {
 }
 
 // ── View model ────────────────────────────────────────────────────────────
-// Catalog owns its product list. Local/optimistic updates via notifyListeners;
-// persistence (API / local DB) is left as TODOs, same as SettingsViewModel.
+// Catalog items persist to users/{uid}/catalog, same shape as
+// ClientsViewModel — optimistic local updates, rolled back on failure.
 
 class CatalogViewModel extends ChangeNotifier {
+  final _firestore = FirebaseFirestore.instance;
+
   final List<Product> _products = [];
   bool _isLoading = false;
   String? _error;
@@ -59,17 +58,33 @@ class CatalogViewModel extends ChangeNotifier {
   String? get error => _error;
   bool get isEmpty => _products.isEmpty;
 
+  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  CollectionReference<Map<String, dynamic>> get _catalogRef {
+    final uid = _uid;
+    if (uid == null) throw Exception('No signed-in user.');
+    return _firestore.collection('users').doc(uid).collection('catalog');
+  }
+
   Future<void> loadProducts() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
+    final uid = _uid;
+    if (uid == null) {
+      _products.clear();
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
     try {
-      // TODO: replace with real data source (API / local DB)
-      await Future.delayed(const Duration(milliseconds: 300));
+      final snapshot =
+      await _catalogRef.orderBy('name').get();
       _products
         ..clear()
-        ..addAll(<Product>[]); // TODO: populate from persistence
+        ..addAll(snapshot.docs.map((d) => Product.fromMap(d.id, d.data())));
     } catch (e) {
       _error = 'Failed to load products: $e';
     } finally {
@@ -78,23 +93,59 @@ class CatalogViewModel extends ChangeNotifier {
     }
   }
 
-  void addProduct(Product product) {
-    _products.add(product);
+  Future<void> addProduct(Product product) async {
+    final docRef = _catalogRef.doc();
+    final saved = Product(
+      id: docRef.id,
+      name: product.name,
+      price: product.price,
+      stock: product.stock,
+    );
+
+    _products.add(saved); // optimistic UI
+    _error = null;
     notifyListeners();
-    // TODO: persist to local storage / backend
+
+    try {
+      await docRef.set(saved.toMap());
+    } catch (e) {
+      _error = 'Could not save this product. Please try again.';
+      _products.removeWhere((p) => p.id == saved.id);
+      notifyListeners();
+    }
   }
 
-  void updateStock(String id, int newStock) {
+  Future<void> updateStock(String id, int newStock) async {
     final index = _products.indexWhere((p) => p.id == id);
     if (index == -1) return;
-    _products[index] = _products[index].copyWith(stock: newStock);
+    final previous = _products[index];
+
+    _products[index] = previous.copyWith(stock: newStock);
+    _error = null;
     notifyListeners();
-    // TODO: persist to local storage / backend
+
+    try {
+      await _catalogRef.doc(id).update({'stock': newStock});
+    } catch (e) {
+      _error = 'Could not update stock. Please try again.';
+      _products[index] = previous;
+      notifyListeners();
+    }
   }
 
-  void removeProduct(String id) {
-    _products.removeWhere((p) => p.id == id);
+  Future<void> removeProduct(String id) async {
+    final index = _products.indexWhere((p) => p.id == id);
+    if (index == -1) return;
+    final removed = _products.removeAt(index);
+    _error = null;
     notifyListeners();
-    // TODO: persist to local storage / backend
+
+    try {
+      await _catalogRef.doc(id).delete();
+    } catch (e) {
+      _error = 'Could not delete this product. Please try again.';
+      _products.insert(index, removed);
+      notifyListeners();
+    }
   }
 }

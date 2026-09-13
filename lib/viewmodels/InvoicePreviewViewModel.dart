@@ -109,7 +109,14 @@ class InvoicePreviewViewModel extends ChangeNotifier {
     final ref = _docRef(inv.id);
     if (ref == null) return;
     try {
-      await ref.update({'status': storedStatus});
+      await ref.update({
+        'status': storedStatus,
+        // Tracks real days-to-pay for the Reports screen; cleared if
+        // un-marked so a later re-payment doesn't keep a stale date.
+        'paidAt': storedStatus == InvoiceStatus.paid
+            ? FieldValue.serverTimestamp()
+            : FieldValue.delete(),
+      });
     } catch (e) {
       // Roll back on failure.
       invoice = inv;

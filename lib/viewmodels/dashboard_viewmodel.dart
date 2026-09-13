@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../services/ProfileService.dart';
 import '../services/auth_service.dart';
+import '../utils/invoice_stats.dart';
+import '../utils/invoice_status.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -112,84 +114,54 @@ class DashboardViewModel extends ChangeNotifier {
           .get();
 
       final now = DateTime.now();
-      // Bucket start for each of the last 6 months, oldest first.
-      final monthStarts = List.generate(
-          6, (i) => DateTime(now.year, now.month - 5 + i));
+      final docsData = snapshot.docs.map((d) => d.data()).toList();
 
-      double totalRevenue = 0, paid = 0, unpaid = 0;
-      int paidCount = 0, pendingCount = 0, overdueCount = 0;
-      final monthlyRevenue = List<double>.filled(6, 0);
+      final agg = aggregateInvoices(
+        docsData,
+        now: now,
+        buckets: lastSixMonthBuckets(now, (d) => DateFormat('MMM').format(d)),
+      );
+
+      _stats = DashboardStats(
+        totalRevenue: agg.totalRevenue,
+        paid: agg.paid,
+        unpaid: agg.unpaid,
+        totalInvoices: agg.totalInvoices,
+        paidCount: agg.paidCount,
+        pendingCount: agg.pendingCount,
+        overdueCount: agg.overdueCount,
+        monthlyRevenue: agg.bucketed,
+      );
+
       final recent = <RecentInvoice>[];
-
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        final rawStatus = (data['status'] as String? ?? 'sent').toLowerCase();
-        if (rawStatus == 'draft') continue; // drafts aren't "sent" yet
+        final rawStatus = (data['status'] as String?)?.toLowerCase();
+        if (rawStatus == InvoiceStatus.draft) continue;
 
-        final amount = (data['grandTotal'] as num? ?? 0).toDouble();
         final dueDate = (data['dueDate'] as Timestamp?)?.toDate();
         final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-        final isOverdue = rawStatus != 'paid' &&
-            dueDate != null &&
-            dueDate.isBefore(now);
-
+        final normalized = InvoiceStatus.normalize(rawStatus, dueDate, now: now);
+        // RecentInvoice/InvoiceCard use 'pending' for the not-yet-due,
+        // not-yet-paid state, where the shared status util uses 'sent'.
         final displayStatus =
-        rawStatus == 'paid' ? 'paid' : (isOverdue ? 'overdue' : 'pending');
-
-        totalRevenue += amount;
-        if (displayStatus == 'paid') {
-          paid += amount;
-          paidCount++;
-        } else {
-          unpaid += amount;
-          if (displayStatus == 'overdue') {
-            overdueCount++;
-          } else {
-            pendingCount++;
-          }
-        }
-
-        if (createdAt != null) {
-          for (var i = 0; i < monthStarts.length; i++) {
-            final isLastBucket = i == monthStarts.length - 1;
-            final bucketEnd = isLastBucket
-                ? DateTime(now.year, now.month + 1)
-                : monthStarts[i + 1];
-            if (!createdAt.isBefore(monthStarts[i]) &&
-                createdAt.isBefore(bucketEnd)) {
-              monthlyRevenue[i] += amount;
-              break;
-            }
-          }
-        }
+        normalized == InvoiceStatus.sent ? 'pending' : normalized;
 
         final clientName = (data['clientName'] as String?) ?? 'Client';
-
         recent.add(RecentInvoice(
           id: doc.id,
           number: (data['invoiceNumber'] as String?) ?? doc.id,
           clientName: clientName,
           clientInitial:
           clientName.trim().isNotEmpty ? clientName.trim()[0].toUpperCase() : '?',
-          amount: amount,
+          amount: (data['grandTotal'] as num? ?? 0).toDouble(),
           status: displayStatus,
-          date: DateFormat('d MMM yyyy')
-              .format(createdAt ?? dueDate ?? now),
+          date: DateFormat('d MMM yyyy').format(createdAt ?? dueDate ?? now),
         ));
+
+        if (recent.length >= 4) break;
       }
-
-      _stats = DashboardStats(
-        totalRevenue: totalRevenue,
-        paid: paid,
-        unpaid: unpaid,
-        totalInvoices: paidCount + pendingCount + overdueCount,
-        paidCount: paidCount,
-        pendingCount: pendingCount,
-        overdueCount: overdueCount,
-        monthlyRevenue: monthlyRevenue,
-      );
-
-      _recentInvoices = recent.take(4).toList();
+      _recentInvoices = recent;
     } catch (e) {
       _errorMsg = e.toString();
     }
