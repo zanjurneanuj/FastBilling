@@ -94,7 +94,7 @@ class _MiniInvoicePreview extends StatelessWidget {
       decoration: BoxDecoration(
         color: template.headerColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Column(
@@ -124,7 +124,7 @@ class _MiniInvoicePreview extends StatelessWidget {
               width: 60 * w,
               decoration: BoxDecoration(
                 color: (template.darkHeader ? Colors.white : Colors.black)
-                    .withOpacity(0.18),
+                    .withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

@@ -397,7 +397,7 @@ class _SheetChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
         color: selected
-            ? AppColors.primary.withOpacity(0.1)
+            ? AppColors.primary.withValues(alpha: 0.1)
             : AppColors.background(context),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(

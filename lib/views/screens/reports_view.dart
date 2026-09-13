@@ -351,7 +351,7 @@ class _RevenueChartCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: (isPositive ? c.green : c.red).withOpacity(0.15),
+              color: (isPositive ? c.green : c.red).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -536,7 +536,7 @@ class _LineChartPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [lineColor.withOpacity(0.28), lineColor.withOpacity(0.0)],
+          colors: [lineColor.withValues(alpha: 0.28), lineColor.withValues(alpha: 0.0)],
         ).createShader(Rect.fromLTWH(0, 0, size.width, chartH)),
     );
 
@@ -560,7 +560,7 @@ class _LineChartPainter extends CustomPainter {
     // Dots — draw bg circle first to "cut" the line visually
     for (final p in points) {
       canvas.drawCircle(p, 4,
-          Paint()..color = lineColor.withOpacity(0.15)); // subtle glow
+          Paint()..color = lineColor.withValues(alpha: 0.15)); // subtle glow
       canvas.drawCircle(
           p, 4,
           Paint()

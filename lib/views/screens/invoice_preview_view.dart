@@ -292,7 +292,7 @@ class _InvoiceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.18),
+              color: Colors.black.withValues(alpha: 0.18),
               blurRadius: 24,
               offset: const Offset(0, 8)),
         ],
@@ -413,7 +413,7 @@ class _InvoiceCard extends StatelessWidget {
 
         // ── Line items table header — uses template accent tint ────────
         Container(
-          color: headerBg.withOpacity(0.4),
+          color: headerBg.withValues(alpha: 0.4),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Row(children: [
             const Expanded(
@@ -522,7 +522,7 @@ class _InvoiceCard extends StatelessWidget {
             margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: headerBg.withOpacity(0.3),
+              color: headerBg.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(inv.note!,

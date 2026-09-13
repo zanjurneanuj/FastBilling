@@ -1,13 +1,19 @@
-<<<<<<< HEAD
-# fast_billing
+# FastBilling
 
-A new Flutter project.
+A Flutter invoicing app: create and send invoices, track clients and payment
+status, manage a product catalog, view revenue reports, and print receipts
+to POS thermal printers (WiFi/Bluetooth/USB). Backed by Firebase
+(Authentication + Firestore) with a local sqflite cache for the business
+profile and app settings.
 
-## Getting Started
+## Getting started
 
-This project is a starting point for a Flutter application.
+```
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+A few resources if this is your first Flutter project:
 
 - [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
 - [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
@@ -16,6 +22,3 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
-=======
-# FastBilling
->>>>>>> 555901f829f55597ef7076955449caaf92cf8556

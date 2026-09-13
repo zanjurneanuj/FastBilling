@@ -266,7 +266,7 @@ class _Header extends StatelessWidget {
         Container(
           width: 44, height: 44,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.18),
+            color: Colors.white.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.receipt_long_rounded,
@@ -382,7 +382,7 @@ class _ExpandableSection extends StatelessWidget {
                   Container(
                     width: 32, height: 32,
                     decoration: BoxDecoration(
-                        color: _purple.withOpacity(0.1),
+                        color: _purple.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8)),
                     child: const Icon(Icons.receipt_outlined,
                         color: _purple, size: 16),

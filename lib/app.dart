@@ -98,7 +98,7 @@ class ZanvoyApp extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.primary.withOpacity(0.5),
+          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -151,7 +151,35 @@ final GoRouter _router = GoRouter(
   refreshListenable: Listenable.merge([
     GoRouterRefreshStream(AuthService.authStateChanges),
     ProfileService.changed,
-  ]),  redirect: (context, state) {
+  ]),
+  errorBuilder: (context, state) => Scaffold(
+    backgroundColor: AppColors.background(context),
+    appBar: AppBar(backgroundColor: AppColors.surface(context), elevation: 0),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 48, color: AppColors.textSecondary(context)),
+            const SizedBox(height: 16),
+            Text("Page not found",
+                style: TextStyle(
+                    color: AppColors.textPrimary(context),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => context.go('/home'),
+              child: const Text('Back to Home'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+  redirect: (context, state) {
     final loggedIn   = AuthService.isLoggedIn;
     final hasProfile = ProfileService.hasProfile;
     final loc = state.matchedLocation;

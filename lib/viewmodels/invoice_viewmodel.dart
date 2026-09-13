@@ -208,7 +208,6 @@ class InvoiceCreateViewModel extends ChangeNotifier {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   Future<bool> saveDraft() async {
-    debugPrint('>>> saveDraft called, uid=$_uid');   //
     final uid = _uid;
 
     if (uid == null) {
@@ -230,18 +229,10 @@ class InvoiceCreateViewModel extends ChangeNotifier {
 
       final data = _toMap(status: 'draft');
 
-      debugPrint('========== SAVING INVOICE ==========');
-      debugPrint('UID: $uid');
-      debugPrint('Invoice ID: $invoiceNumber');
-      debugPrint('Path: ${invoiceRef.path}');
-      debugPrint('Data: $data');
-
       await invoiceRef.set(
         data,
         SetOptions(merge: true),
       );
-
-      debugPrint('========== INVOICE SAVED ==========');
 
       isSaving = false;
       isDraftSaved = true;
@@ -249,10 +240,7 @@ class InvoiceCreateViewModel extends ChangeNotifier {
 
       return true;
     } catch (e, stackTrace) {
-      debugPrint('========== FIRESTORE ERROR ==========');
-      debugPrint('Error: $e');
-      debugPrint('StackTrace: $stackTrace');
-      debugPrint('====================================');
+      debugPrint('[InvoiceCreate] saveDraft failed: $e\n$stackTrace');
 
       isSaving = false;
       errorMsg = 'Failed to save invoice: $e';

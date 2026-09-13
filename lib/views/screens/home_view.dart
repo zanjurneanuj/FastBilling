@@ -117,7 +117,7 @@ void _showNotifications(BuildContext context, DashboardStats stats) {
                   Container(
                     width: 36, height: 36,
                     decoration: BoxDecoration(
-                        color: it.$2.withOpacity(0.12), shape: BoxShape.circle),
+                        color: it.$2.withValues(alpha: 0.12), shape: BoxShape.circle),
                     child: Icon(it.$1, color: it.$2, size: 18),
                   ),
                   const SizedBox(width: 12),
@@ -176,7 +176,7 @@ class _BottomNav extends StatelessWidget {
         onDestinationSelected: onTap,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        indicatorColor: AppColors.primary.withOpacity(0.12),
+        indicatorColor: AppColors.primary.withValues(alpha: 0.12),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
@@ -441,12 +441,12 @@ class _RevenueCard extends StatelessWidget {
           Expanded(
             child: Text('Revenue this month',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.8), fontSize: 13)),
+                    color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('Collected',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.65), fontSize: 11)),
+                    color: Colors.white.withValues(alpha: 0.65), fontSize: 11)),
             Text('₹${_fmt(stats.paid)}',
                 style: const TextStyle(
                     color: Colors.white,
@@ -455,10 +455,10 @@ class _RevenueCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text('Pending',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.65), fontSize: 11)),
+                    color: Colors.white.withValues(alpha: 0.65), fontSize: 11)),
             Text('₹${_fmt(stats.unpaid)}',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontWeight: FontWeight.w700,
                     fontSize: 14)),
           ]),
@@ -484,7 +484,7 @@ class _RevenueCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: i == 5
                         ? Colors.white
-                        : Colors.white.withOpacity(0.3),
+                        : Colors.white.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -498,7 +498,7 @@ class _RevenueCard extends StatelessWidget {
             child: Text(m,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.6), fontSize: 10)),
+                    color: Colors.white.withValues(alpha: 0.6), fontSize: 10)),
           )).toList(),
         ),
       ]),
@@ -528,7 +528,7 @@ class _StatsRow extends StatelessWidget {
         subColor: AppColors.textSecondary(context),
         icon: Icons.receipt_long_outlined,
         iconColor: AppColors.primary,
-        iconBg: AppColors.primary.withOpacity(0.1),
+        iconBg: AppColors.primary.withValues(alpha: 0.1),
       ),
     ),
     const SizedBox(width: 10),
@@ -540,7 +540,7 @@ class _StatsRow extends StatelessWidget {
         subColor: AppColors.textSecondary(context),
         icon: Icons.check_circle_outline_rounded,
         iconColor: AppColors.success,
-        iconBg: AppColors.success.withOpacity(0.1),
+        iconBg: AppColors.success.withValues(alpha: 0.1),
       ),
     ),
   ]);
@@ -566,7 +566,7 @@ class _StatsRow2 extends StatelessWidget {
         subColor: AppColors.textSecondary(context),
         icon: Icons.hourglass_top_rounded,
         iconColor: AppColors.warning,
-        iconBg: AppColors.warning.withOpacity(0.1),
+        iconBg: AppColors.warning.withValues(alpha: 0.1),
         valueColor: AppColors.warning,
       ),
     ),
@@ -579,7 +579,7 @@ class _StatsRow2 extends StatelessWidget {
         subColor: AppColors.error,
         icon: Icons.warning_amber_rounded,
         iconColor: AppColors.error,
-        iconBg: AppColors.error.withOpacity(0.1),
+        iconBg: AppColors.error.withValues(alpha: 0.1),
         valueColor: AppColors.error,
       ),
     ),
@@ -714,7 +714,7 @@ class _QACard extends StatelessWidget {
         boxShadow: filled
             ? [
           BoxShadow(
-              color: AppColors.primary.withOpacity(0.35),
+              color: AppColors.primary.withValues(alpha: 0.35),
               blurRadius: 12,
               offset: const Offset(0, 4))
         ]
@@ -765,7 +765,7 @@ class _OverdueBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: AppColors.error.withOpacity(0.06),
+    color: AppColors.error.withValues(alpha: 0.06),
     borderRadius: BorderRadius.circular(12),
     child: InkWell(
       onTap: onTap,
@@ -774,13 +774,13 @@ class _OverdueBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.error.withOpacity(0.2)),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
         ),
         child: Row(children: [
           Container(
             width: 32, height: 32,
             decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.12),
+                color: AppColors.error.withValues(alpha: 0.12),
                 shape: BoxShape.circle),
             child: const Icon(Icons.warning_amber_rounded,
                 color: AppColors.error, size: 17),
@@ -798,14 +798,14 @@ class _OverdueBanner extends StatelessWidget {
                   const SizedBox(height: 1),
                   Text('Action needed',
                       style: TextStyle(
-                          color: AppColors.error.withOpacity(0.7),
+                          color: AppColors.error.withValues(alpha: 0.7),
                           fontSize: 11)),
                 ]),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.12),
+                color: AppColors.error.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8)),
             child: const Text('View',
                 style: TextStyle(

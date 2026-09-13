@@ -171,7 +171,7 @@ class _TemplateCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.15),
+              color: AppColors.primary.withValues(alpha: 0.15),
               blurRadius: 12,
               offset: const Offset(0, 4),
             )
@@ -253,7 +253,7 @@ class _MiniPreview extends StatelessWidget {
     final isDark = template.darkHeader;
     final textOnHeader = isDark ? Colors.white : const Color(0xFF1A1A2E);
     final subOnHeader  = isDark
-        ? Colors.white.withOpacity(0.6)
+        ? Colors.white.withValues(alpha: 0.6)
         : const Color(0xFF888888);
 
     return Container(
@@ -344,7 +344,7 @@ class _MiniPreview extends StatelessWidget {
                 width: 24,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.25),
+                  color: accent.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

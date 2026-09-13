@@ -62,7 +62,7 @@ class _InvoiceCreateBody extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
@@ -479,13 +479,13 @@ class _LineItemRowState extends State<_LineItemRow> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _nameFocused
-              ? AppColors.primary.withOpacity(0.5)
+              ? AppColors.primary.withValues(alpha: 0.5)
               : AppColors.border(context),
           width: _nameFocused ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -505,7 +505,7 @@ class _LineItemRowState extends State<_LineItemRow> {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
+                    color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
@@ -639,7 +639,7 @@ class _LineItemRowState extends State<_LineItemRow> {
                   ),
                   decoration: BoxDecoration(
                     color: hasValue
-                        ? AppColors.primary.withOpacity(0.08)
+                        ? AppColors.primary.withValues(alpha: 0.08)
                         : AppColors.background(context),
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -726,7 +726,7 @@ class _AddItemButton extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.primary.withOpacity(0.4),
+          color: AppColors.primary.withValues(alpha: 0.4),
           style: BorderStyle.solid,
         ),
       ),
@@ -1052,9 +1052,7 @@ class _BottomBar extends StatelessWidget {
               onPressed: vm.isSaving
                   ? null
                   : () async {
-                debugPrint('=== PREVIEW BUTTON TAPPED ===');  // ← add
                 final ok = await vm.saveDraft();
-                debugPrint('=== saveDraft returned: $ok ===');
                 if (ok && context.mounted) {
                         context.push('/invoices/${vm.invoiceNumber}/preview');
                       }
@@ -1080,7 +1078,6 @@ class _BottomBar extends StatelessWidget {
             flex: 2,
             child: ElevatedButton(
               onPressed: () async {
-                debugPrint('>>> Save & send button tapped');
                 final ok = await vm.saveAndSend();
                 if (ok && context.mounted) {
                   context.push('/invoices/${vm.invoiceNumber}/preview');
@@ -1129,9 +1126,9 @@ class _ErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color: AppColors.error.withOpacity(0.08),
+      color: AppColors.error.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
     ),
     child: Row(
       children: [

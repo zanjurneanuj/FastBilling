@@ -249,9 +249,9 @@ class _ConnectedBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
-      color: AppColors.success.withOpacity(0.08),
+      color: AppColors.success.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppColors.success.withOpacity(0.3)),
+      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
     ),
     child: Row(children: [
       Icon(Icons.print_rounded, color: AppColors.success, size: 22),
@@ -270,7 +270,7 @@ class _ConnectedBanner extends StatelessWidget {
                 'Connected via ${_typeLabel(device.type)}'
                     '${device.subtitle != null ? " · ${device.subtitle}" : ""}',
                 style: TextStyle(
-                    color: AppColors.success.withOpacity(0.8), fontSize: 12)),
+                    color: AppColors.success.withValues(alpha: 0.8), fontSize: 12)),
           ],
         ),
       ),
@@ -284,7 +284,7 @@ class _ConnectedBanner extends StatelessWidget {
         onTap: onDisconnect,
         child: Text('Disconnect',
             style: TextStyle(
-                color: AppColors.error.withOpacity(0.85),
+                color: AppColors.error.withValues(alpha: 0.85),
                 fontSize: 12,
                 fontWeight: FontWeight.w600)),
       ),
@@ -326,7 +326,7 @@ class _ConnectionTypeSelector extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppColors.primary.withOpacity(0.1)
+                      ? AppColors.primary.withValues(alpha: 0.1)
                       : AppColors.surface(context),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
@@ -379,7 +379,7 @@ class _PrinterTile extends StatelessWidget {
       Container(
         width: 36, height: 36,
         decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10)),
         child: Icon(Icons.print_outlined, color: AppColors.primary, size: 18),
       ),
@@ -408,7 +408,7 @@ class _PrinterTile extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.12),
+              color: AppColors.success.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20)),
           child: const Text('Active',
               style: TextStyle(
@@ -443,7 +443,7 @@ class _AddManuallyButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 13),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
       ),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.add_rounded, color: AppColors.primary, size: 18),

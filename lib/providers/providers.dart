@@ -13,13 +13,9 @@ final List<SingleChildWidget> appProviders = [
   ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
   ChangeNotifierProvider<LocaleProvider>(create: (_) => LocaleProvider()),
   ChangeNotifierProvider<AuthViewModel>(create: (_) => AuthViewModel()),
- // ChangeNotifierProvider<OnboardingViewModel>(create: (_) => OnboardingViewModel()),
   ChangeNotifierProvider<DashboardViewModel>(create: (_) => DashboardViewModel()),
-  // ChangeNotifierProvider<InvoiceViewModel>(create: (_) => InvoiceViewModel()),
-   ChangeNotifierProvider<ClientsViewModel>(create: (_) => ClientsViewModel()),
-  // ChangeNotifierProvider<CatalogViewModel>(create: (_) => CatalogViewModel()),
-   ChangeNotifierProvider<ReportsViewModel>(create: (_) => ReportsViewModel()),
-   ChangeNotifierProvider<SettingsViewModel>(create: (_) => SettingsViewModel()),
+  ChangeNotifierProvider<ClientsViewModel>(create: (_) => ClientsViewModel()),
+  ChangeNotifierProvider<ReportsViewModel>(create: (_) => ReportsViewModel()),
+  ChangeNotifierProvider<SettingsViewModel>(create: (_) => SettingsViewModel()),
   ChangeNotifierProvider<InvoicePreviewViewModel>(create: (_) => InvoicePreviewViewModel()),
-  ChangeNotifierProvider<SettingsViewModel>(create: (_)=>SettingsViewModel())
 ];
