@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../services/ProfileService.dart';
 import '../services/auth_service.dart';
@@ -14,6 +16,9 @@ class DashboardStats {
   final int pendingCount;
   final int overdueCount;
 
+  /// Total invoiced amount for each of the last 6 months, oldest first.
+  final List<double> monthlyRevenue;
+
   const DashboardStats({
     this.totalRevenue = 0,
     this.paid = 0,
@@ -22,6 +27,7 @@ class DashboardStats {
     this.paidCount = 0,
     this.pendingCount = 0,
     this.overdueCount = 0,
+    this.monthlyRevenue = const [0, 0, 0, 0, 0, 0],
   });
 }
 
@@ -56,6 +62,8 @@ class DashboardViewModel extends ChangeNotifier {
     ProfileService.changed.addListener(_onProfileChanged);
   }
 
+  final _firestore = FirebaseFirestore.instance;
+
   bool _isLoading = false;
   String _errorMsg = '';
   DashboardStats _stats = const DashboardStats();
@@ -86,58 +94,102 @@ class DashboardViewModel extends ChangeNotifier {
     _errorMsg = '';
     notifyListeners();
 
-    try {
-      // TODO: replace with Hive / repository calls
-      await Future.delayed(const Duration(milliseconds: 600));
+    final uid = AuthService.currentUser?.uid;
+    if (uid == null) {
+      _stats = const DashboardStats();
+      _recentInvoices = [];
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
 
-      _stats = const DashboardStats(
-        totalRevenue:  218500,
-        paid:          173500,
-        unpaid:         45000,
-        totalInvoices:     12,
-        paidCount:          8,
-        pendingCount:       2,
-        overdueCount:       2,
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('invoices')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      final now = DateTime.now();
+      // Bucket start for each of the last 6 months, oldest first.
+      final monthStarts = List.generate(
+          6, (i) => DateTime(now.year, now.month - 5 + i));
+
+      double totalRevenue = 0, paid = 0, unpaid = 0;
+      int paidCount = 0, pendingCount = 0, overdueCount = 0;
+      final monthlyRevenue = List<double>.filled(6, 0);
+      final recent = <RecentInvoice>[];
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final rawStatus = (data['status'] as String? ?? 'sent').toLowerCase();
+        if (rawStatus == 'draft') continue; // drafts aren't "sent" yet
+
+        final amount = (data['grandTotal'] as num? ?? 0).toDouble();
+        final dueDate = (data['dueDate'] as Timestamp?)?.toDate();
+        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+        final isOverdue = rawStatus != 'paid' &&
+            dueDate != null &&
+            dueDate.isBefore(now);
+
+        final displayStatus =
+        rawStatus == 'paid' ? 'paid' : (isOverdue ? 'overdue' : 'pending');
+
+        totalRevenue += amount;
+        if (displayStatus == 'paid') {
+          paid += amount;
+          paidCount++;
+        } else {
+          unpaid += amount;
+          if (displayStatus == 'overdue') {
+            overdueCount++;
+          } else {
+            pendingCount++;
+          }
+        }
+
+        if (createdAt != null) {
+          for (var i = 0; i < monthStarts.length; i++) {
+            final isLastBucket = i == monthStarts.length - 1;
+            final bucketEnd = isLastBucket
+                ? DateTime(now.year, now.month + 1)
+                : monthStarts[i + 1];
+            if (!createdAt.isBefore(monthStarts[i]) &&
+                createdAt.isBefore(bucketEnd)) {
+              monthlyRevenue[i] += amount;
+              break;
+            }
+          }
+        }
+
+        final clientName = (data['clientName'] as String?) ?? 'Client';
+
+        recent.add(RecentInvoice(
+          id: doc.id,
+          number: (data['invoiceNumber'] as String?) ?? doc.id,
+          clientName: clientName,
+          clientInitial:
+          clientName.trim().isNotEmpty ? clientName.trim()[0].toUpperCase() : '?',
+          amount: amount,
+          status: displayStatus,
+          date: DateFormat('d MMM yyyy')
+              .format(createdAt ?? dueDate ?? now),
+        ));
+      }
+
+      _stats = DashboardStats(
+        totalRevenue: totalRevenue,
+        paid: paid,
+        unpaid: unpaid,
+        totalInvoices: paidCount + pendingCount + overdueCount,
+        paidCount: paidCount,
+        pendingCount: pendingCount,
+        overdueCount: overdueCount,
+        monthlyRevenue: monthlyRevenue,
       );
 
-      _recentInvoices = const [
-        RecentInvoice(
-          id: 'inv1',
-          number: 'INV-2024-042',
-          clientName: 'Medha Studio',
-          clientInitial: 'M',
-          amount: 45000,
-          status: 'pending',
-          date: '12 Jun 2024',
-        ),
-        RecentInvoice(
-          id: 'inv2',
-          number: 'INV-2024-041',
-          clientName: 'Rohan Mehta',
-          clientInitial: 'R',
-          amount: 18500,
-          status: 'paid',
-          date: '05 Jun 2024',
-        ),
-        RecentInvoice(
-          id: 'inv3',
-          number: 'INV-2024-040',
-          clientName: 'Priya Nair',
-          clientInitial: 'P',
-          amount: 32000,
-          status: 'overdue',
-          date: '20 May 2024',
-        ),
-        RecentInvoice(
-          id: 'inv4',
-          number: 'INV-2024-039',
-          clientName: 'Nexus Labs',
-          clientInitial: 'N',
-          amount: 76000,
-          status: 'paid',
-          date: '10 May 2024',
-        ),
-      ];
+      _recentInvoices = recent.take(4).toList();
     } catch (e) {
       _errorMsg = e.toString();
     }

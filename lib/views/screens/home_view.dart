@@ -65,6 +65,98 @@ class _HomeViewState extends State<HomeView> {
   }
 }
 
+// ─── Notifications sheet ────────────────────────────────────────────────────────
+
+void _showNotifications(BuildContext context, DashboardStats stats) {
+  final items = <(IconData, Color, String, String)>[
+    if (stats.overdueCount > 0)
+      (
+        Icons.warning_amber_rounded,
+        AppColors.error,
+        '${stats.overdueCount} overdue invoice${stats.overdueCount > 1 ? 's' : ''}',
+        'Follow up with clients to get paid.',
+      ),
+    if (stats.pendingCount > 0)
+      (
+        Icons.hourglass_top_rounded,
+        AppColors.warning,
+        '${stats.pendingCount} invoice${stats.pendingCount > 1 ? 's' : ''} pending',
+        'Awaiting payment from clients.',
+      ),
+  ];
+
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: AppColors.surface(context),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Notifications',
+                style: TextStyle(
+                    color: AppColors.textPrimary(ctx),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text("You're all caught up.",
+                    style: TextStyle(color: AppColors.textSecondary(ctx))),
+              )
+            else
+              ...items.map((it) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                        color: it.$2.withOpacity(0.12), shape: BoxShape.circle),
+                    child: Icon(it.$1, color: it.$2, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(it.$3,
+                            style: TextStyle(
+                                color: AppColors.textPrimary(ctx),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13)),
+                        Text(it.$4,
+                            style: TextStyle(
+                                color: AppColors.textSecondary(ctx),
+                                fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ]),
+              )),
+            if (items.isNotEmpty)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.go('/invoices');
+                  },
+                  child: const Text('View invoices'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 // ─── Bottom Nav ───────────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {
@@ -147,7 +239,7 @@ class _DashboardTab extends StatelessWidget {
                       IconButton(
                         icon: Icon(Icons.notifications_outlined,
                             color: AppColors.textSecondary(context), size: 24),
-                        onPressed: () {},
+                        onPressed: () => _showNotifications(context, vm.stats),
                       ),
                       if (vm.stats.overdueCount > 0)
                         Positioned(
@@ -162,7 +254,10 @@ class _DashboardTab extends StatelessWidget {
                   ),
                   Padding(
                     padding: const EdgeInsets.only(right: 16, left: 4),
-                    child: _AvatarCircle(name: vm.businessName),
+                    child: GestureDetector(
+                      onTap: () => context.go('/settings'),
+                      child: _AvatarCircle(name: vm.businessName),
+                    ),
                   ),
                 ],
               ),
@@ -187,13 +282,13 @@ class _DashboardTab extends StatelessWidget {
                     if (vm.stats.overdueCount > 0) ...[
                       _OverdueBanner(
                         count: vm.stats.overdueCount,
-                        onTap: () {},
+                        onTap: () => context.go('/invoices'),
                       ),
                       const SizedBox(height: 16),
                     ],
                     _SectionHeader(
                       title: 'Recent Invoices',
-                      onSeeAll: () {},
+                      onSeeAll: () => context.go('/invoices'),
                     ),
                     const SizedBox(height: 12),
                     if (vm.recentInvoices.isEmpty)
@@ -327,7 +422,13 @@ class _RevenueCard extends StatelessWidget {
     final now    = DateTime.now();
     final months = List.generate(6, (i) =>
         DateFormat('MMM').format(DateTime(now.year, now.month - 5 + i)));
-    const heights = [0.35, 0.5, 0.4, 0.55, 0.45, 1.0];
+    final maxMonth = stats.monthlyRevenue.fold<double>(
+        0, (m, v) => v > m ? v : m);
+    // Relative bar heights for the last 6 months; a flat floor keeps
+    // zero-revenue months visible instead of collapsing to nothing.
+    final heights = stats.monthlyRevenue
+        .map((v) => maxMonth > 0 ? 0.12 + (v / maxMonth) * 0.88 : 0.12)
+        .toList();
 
     return Container(
       width: double.infinity,
@@ -423,8 +524,8 @@ class _StatsRow extends StatelessWidget {
       child: _StatTile(
         label: 'Invoices sent',
         value: '${stats.totalInvoices}',
-        sub: '↑ ${stats.paidCount} this week',
-        subColor: AppColors.success,
+        sub: '${stats.pendingCount} awaiting payment',
+        subColor: AppColors.textSecondary(context),
         icon: Icons.receipt_long_outlined,
         iconColor: AppColors.primary,
         iconBg: AppColors.primary.withOpacity(0.1),
@@ -607,40 +708,49 @@ class _QACard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: filled ? AppColors.primary : AppColors.surface(context),
+    child: Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: filled
+            ? [
+          BoxShadow(
+              color: AppColors.primary.withOpacity(0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ]
+            : null,
+      ),
+      child: Material(
+        color: filled ? AppColors.primary : AppColors.surface(context),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          border: filled
-              ? null
-              : Border.all(color: AppColors.border(context)),
-          boxShadow: filled
-              ? [
-            BoxShadow(
-                color: AppColors.primary.withOpacity(0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 4))
-          ]
-              : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: filled
+                  ? null
+                  : Border.all(color: AppColors.border(context)),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon,
+                  size: 22,
+                  color: filled ? Colors.white : AppColors.primary),
+              const SizedBox(height: 6),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                      color: filled
+                          ? Colors.white
+                          : AppColors.textPrimary(context))),
+            ]),
+          ),
         ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon,
-              size: 22,
-              color: filled ? Colors.white : AppColors.primary),
-          const SizedBox(height: 6),
-          Text(label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
-                  color: filled
-                      ? Colors.white
-                      : AppColors.textPrimary(context))),
-        ]),
       ),
     ),
   );
@@ -654,55 +764,58 @@ class _OverdueBanner extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding:
-    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    decoration: BoxDecoration(
-      color: AppColors.error.withOpacity(0.06),
+  Widget build(BuildContext context) => Material(
+    color: AppColors.error.withOpacity(0.06),
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: AppColors.error.withOpacity(0.2)),
-    ),
-    child: Row(children: [
-      Container(
-        width: 32, height: 32,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-            color: AppColors.error.withOpacity(0.12),
-            shape: BoxShape.circle),
-        child: const Icon(Icons.warning_amber_rounded,
-            color: AppColors.error, size: 17),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('$count overdue invoice${count > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                      color: AppColors.error,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
-              const SizedBox(height: 1),
-              Text('Action needed',
-                  style: TextStyle(
-                      color: AppColors.error.withOpacity(0.7),
-                      fontSize: 11)),
-            ]),
-      ),
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8)),
-          child: const Text('Remind',
-              style: TextStyle(
-                  color: AppColors.error,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.error.withOpacity(0.2)),
         ),
+        child: Row(children: [
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.12),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: AppColors.error, size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('$count overdue invoice${count > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13)),
+                  const SizedBox(height: 1),
+                  Text('Action needed',
+                      style: TextStyle(
+                          color: AppColors.error.withOpacity(0.7),
+                          fontSize: 11)),
+                ]),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8)),
+            child: const Text('View',
+                style: TextStyle(
+                    color: AppColors.error,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ]),
       ),
-    ]),
+    ),
   );
 }
 
@@ -723,13 +836,17 @@ class _SectionHeader extends StatelessWidget {
               fontSize: 16,
               fontWeight: FontWeight.w600)),
       if (onSeeAll != null)
-        GestureDetector(
+        InkWell(
           onTap: onSeeAll,
-          child: const Text('See all',
-              style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          borderRadius: BorderRadius.circular(6),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Text('See all',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
+          ),
         ),
     ],
   );
