@@ -33,7 +33,10 @@ class _InvoiceCreateBody extends StatelessWidget {
           // ── AppBar ──────────────────────────────────────────────────────
           appBar: AppBar(
             backgroundColor: AppColors.surface(context),
-            elevation: 0,
+            elevation: 1,
+            scrolledUnderElevation: 1,
+            shadowColor: Colors.black.withValues(alpha: 0.08),
+            surfaceTintColor: Colors.transparent,
             leading: IconButton(
               icon: const Icon(Icons.close_rounded),
               color: AppColors.textPrimary(context),
@@ -211,8 +214,15 @@ class _MetaTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border(context)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,6 +233,7 @@ class _MetaTile extends StatelessWidget {
               color: AppColors.textSecondary(context),
               fontSize: 11,
               fontWeight: FontWeight.w500,
+              letterSpacing: 0.2,
             ),
           ),
           const SizedBox(height: 4),
@@ -230,8 +241,8 @@ class _MetaTile extends StatelessWidget {
             value,
             style: TextStyle(
               color: AppColors.textPrimary(context),
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -254,11 +265,22 @@ class _ClientPicker extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showClientSheet(context, vm),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border(context)),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hasClient
+                ? AppColors.primary.withValues(alpha: 0.35)
+                : AppColors.border(context),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -294,12 +316,20 @@ class _ClientPicker extends StatelessWidget {
                 size: 20,
               ),
             ] else ...[
-              Icon(
-                Icons.person_add_outlined,
-                color: AppColors.textSecondary(context),
-                size: 20,
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.person_add_outlined,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Text(
                 'Select client',
                 style: TextStyle(
@@ -981,24 +1011,24 @@ class _AddItemButton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.4),
+          color: AppColors.primary.withValues(alpha: 0.3),
           style: BorderStyle.solid,
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_rounded, color: AppColors.primary, size: 18),
+          const Icon(Icons.add_rounded, color: AppColors.primary, size: 18),
           const SizedBox(width: 6),
           const Text(
             'Add item',
             style: TextStyle(
               color: AppColors.primary,
               fontSize: 14,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1019,8 +1049,15 @@ class _TaxDiscountPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border(context)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1263,82 +1300,114 @@ class _TotalsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Divider(color: AppColors.border(context)),
-        const SizedBox(height: 8),
-        _TotalRow(
-          label: 'Subtotal',
-          value: '₹${vm.fmt(vm.subtotal)}',
-          labelStyle: TextStyle(
-            color: AppColors.textSecondary(context),
-            fontSize: 13,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border(context)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-          valueStyle: TextStyle(
-            color: AppColors.textSecondary(context),
-            fontSize: 13,
-          ),
-        ),
-        if (vm.gstPercent > 0) ...[
-          const SizedBox(height: 4),
-          _TotalRow(
-            label: 'GST ${vm.gstPercent.toStringAsFixed(0)}%',
-            value: '₹${vm.fmt(vm.gstAmt)}',
-            labelStyle: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 13,
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              children: [
+                _TotalRow(
+                  label: 'Subtotal',
+                  value: '₹${vm.fmt(vm.subtotal)}',
+                  labelStyle: TextStyle(
+                    color: AppColors.textSecondary(context),
+                    fontSize: 13,
+                  ),
+                  valueStyle: TextStyle(
+                    color: AppColors.textSecondary(context),
+                    fontSize: 13,
+                  ),
+                ),
+                if (vm.gstPercent > 0) ...[
+                  const SizedBox(height: 6),
+                  _TotalRow(
+                    label: 'GST ${vm.gstPercent.toStringAsFixed(0)}%',
+                    value: '₹${vm.fmt(vm.gstAmt)}',
+                    labelStyle: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 13,
+                    ),
+                    valueStyle: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                if (vm.discountAmt > 0) ...[
+                  const SizedBox(height: 6),
+                  _TotalRow(
+                    label: 'Discount',
+                    value: '−₹${vm.fmt(vm.discountAmt)}',
+                    labelStyle: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 13,
+                    ),
+                    valueStyle:
+                        TextStyle(color: AppColors.success, fontSize: 13),
+                  ),
+                ],
+                if (vm.roundOff != 0) ...[
+                  const SizedBox(height: 6),
+                  _TotalRow(
+                    label: 'Rounded off',
+                    value:
+                        '${vm.roundOff > 0 ? '+' : '−'}₹${vm.fmt(vm.roundOff.abs())}',
+                    labelStyle: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 13,
+                    ),
+                    valueStyle: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            valueStyle: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 13,
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Grand total',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  '₹${vm.fmtFull(vm.roundedTotal)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-        if (vm.discountAmt > 0) ...[
-          const SizedBox(height: 4),
-          _TotalRow(
-            label: 'Discount',
-            value: '−₹${vm.fmt(vm.discountAmt)}',
-            labelStyle: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 13,
-            ),
-            valueStyle: TextStyle(color: AppColors.success, fontSize: 13),
-          ),
-        ],
-        if (vm.roundOff != 0) ...[
-          const SizedBox(height: 4),
-          _TotalRow(
-            label: 'Rounded off',
-            value:
-                '${vm.roundOff > 0 ? '+' : '−'}₹${vm.fmt(vm.roundOff.abs())}',
-            labelStyle: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 13,
-            ),
-            valueStyle: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 13,
-            ),
-          ),
-        ],
-        const SizedBox(height: 8),
-        _TotalRow(
-          label: 'Grand total',
-          value: '₹${vm.fmtFull(vm.roundedTotal)}',
-          labelStyle: TextStyle(
-            color: AppColors.textPrimary(context),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-          valueStyle: const TextStyle(
-            color: AppColors.primary,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -1495,14 +1564,27 @@ class _SectionLabel extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: TextStyle(
-      color: AppColors.textSecondary(context),
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.8,
-    ),
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 3,
+        height: 12,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Text(
+        text,
+        style: TextStyle(
+          color: AppColors.textSecondary(context),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+        ),
+      ),
+    ],
   );
 }
 
