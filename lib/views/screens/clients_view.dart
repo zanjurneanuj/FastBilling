@@ -192,6 +192,7 @@ class _ClientsViewState extends State<ClientsView>
     final nameCtrl  = TextEditingController();
     final emailCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
+    final cityCtrl  = TextEditingController();
     final formKey   = GlobalKey<FormState>();
     bool saving     = false;
 
@@ -259,6 +260,15 @@ class _ClientsViewState extends State<ClientsView>
                     decoration: const InputDecoration(
                         labelText: 'Phone · optional'),
                   ),
+                  const SizedBox(height: 14),
+
+                  // City (optional)
+                  TextFormField(
+                    controller: cityCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                        labelText: 'City · optional'),
+                  ),
                   const SizedBox(height: 22),
 
                   SizedBox(
@@ -274,6 +284,7 @@ class _ClientsViewState extends State<ClientsView>
                           name:  nameCtrl.text.trim(),
                           email: emailCtrl.text.trim(),
                           phone: phoneCtrl.text.trim(),
+                          city:  cityCtrl.text.trim(),
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                       },

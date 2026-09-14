@@ -7,21 +7,33 @@ class LineItem {
   String name;
   double qty;
   double rate;
+  String hsnCode;
+  String unit;
 
   LineItem({
     required this.id,
     this.name = '',
     this.qty  = 1,
     this.rate = 0,
+    this.hsnCode = '',
+    this.unit = 'PCS',
   });
 
   double get total => qty * rate;
 
-  LineItem copyWith({String? name, double? qty, double? rate}) => LineItem(
-    id:   id,
-    name: name  ?? this.name,
-    qty:  qty   ?? this.qty,
-    rate: rate  ?? this.rate,
+  LineItem copyWith({
+    String? name,
+    double? qty,
+    double? rate,
+    String? hsnCode,
+    String? unit,
+  }) => LineItem(
+    id:      id,
+    name:    name    ?? this.name,
+    qty:     qty     ?? this.qty,
+    rate:    rate    ?? this.rate,
+    hsnCode: hsnCode ?? this.hsnCode,
+    unit:    unit    ?? this.unit,
   );
 
   Map<String, dynamic> toMap() => {
@@ -29,6 +41,8 @@ class LineItem {
     'qty': qty,
     'rate': rate,
     'total': total,
+    'hsnCode': hsnCode,
+    'unit': unit,
   };
 }
 
@@ -65,6 +79,10 @@ class InvoiceCreateViewModel extends ChangeNotifier {
   double gstPercent    = 18.0;   // applied when > 0
   double discountAmt   = 0.0;    // flat discount
 
+  // ── Payment ───────────────────────────────────────────────────────────────
+  static const paymentModes = ['Cash', 'Bank transfer', 'UPI', 'Cheque', 'Card'];
+  String paymentMode = 'Cash';
+
   // ── Status ────────────────────────────────────────────────────────────────
   bool   isSaving     = false;
   bool   isDraftSaved = false;
@@ -97,6 +115,7 @@ class InvoiceCreateViewModel extends ChangeNotifier {
 
         gstPercent = (data['gstPercent'] as num?)?.toDouble() ?? gstPercent;
         discountAmt = (data['discountAmt'] as num?)?.toDouble() ?? discountAmt;
+        paymentMode = data['paymentMode'] as String? ?? paymentMode;
 
         final rawItems = data['items'] as List<dynamic>? ?? [];
         items = rawItems.asMap().entries.map((entry) {
@@ -106,6 +125,8 @@ class InvoiceCreateViewModel extends ChangeNotifier {
             name: m['name'] as String? ?? '',
             qty: (m['qty'] as num?)?.toDouble() ?? 1,
             rate: (m['rate'] as num?)?.toDouble() ?? 0,
+            hsnCode: m['hsnCode'] as String? ?? '',
+            unit: m['unit'] as String? ?? 'PCS',
           );
         }).toList();
       } else {
@@ -124,6 +145,8 @@ class InvoiceCreateViewModel extends ChangeNotifier {
   double get subtotal  => items.fold(0, (s, i) => s + i.total);
   double get gstAmt    => subtotal * gstPercent / 100;
   double get grandTotal => subtotal + gstAmt - discountAmt;
+  double get roundOff => roundedTotal - grandTotal;
+  double get roundedTotal => grandTotal.roundToDouble();
 
   // ── Line item CRUD ────────────────────────────────────────────────────────
   void addItem() {
@@ -134,10 +157,23 @@ class InvoiceCreateViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateItem(String id, {String? name, double? qty, double? rate}) {
+  void updateItem(
+    String id, {
+    String? name,
+    double? qty,
+    double? rate,
+    String? hsnCode,
+    String? unit,
+  }) {
     items = items.map((item) {
       if (item.id != id) return item;
-      return item.copyWith(name: name, qty: qty, rate: rate);
+      return item.copyWith(
+        name: name,
+        qty: qty,
+        rate: rate,
+        hsnCode: hsnCode,
+        unit: unit,
+      );
     }).toList();
     notifyListeners();
   }
@@ -180,6 +216,11 @@ class InvoiceCreateViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPaymentMode(String v) {
+    paymentMode = v;
+    notifyListeners();
+  }
+
   // ── Due date ──────────────────────────────────────────────────────────────
   void setDueDate(DateTime d) {
     dueDate = d;
@@ -196,6 +237,7 @@ class InvoiceCreateViewModel extends ChangeNotifier {
     'items': items.map((i) => i.toMap()).toList(),
     'gstPercent': gstPercent,
     'discountAmt': discountAmt,
+    'paymentMode': paymentMode,
     'subtotal': subtotal,
     'gstAmt': gstAmt,
     'grandTotal': grandTotal,

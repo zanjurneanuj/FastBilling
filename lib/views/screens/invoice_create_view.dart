@@ -104,11 +104,14 @@ class _InvoiceCreateBody extends StatelessWidget {
                         (item) => _LineItemRow(
                           key: ValueKey(item.id),
                           item: item,
-                          onChanged: ({name, qty, rate}) => vm.updateItem(
+                          onChanged: ({name, qty, rate, hsnCode, unit}) =>
+                              vm.updateItem(
                             item.id,
                             name: name,
                             qty: qty,
                             rate: rate,
+                            hsnCode: hsnCode,
+                            unit: unit,
                           ),
                           onDelete: () => vm.removeItem(item.id),
                         ),
@@ -456,6 +459,7 @@ class _ClientPicker extends StatelessWidget {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
+    final cityCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool saving = false;
 
@@ -518,6 +522,12 @@ class _ClientPicker extends StatelessWidget {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Phone · optional'),
                 ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: cityCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'City · optional'),
+                ),
                 const SizedBox(height: 22),
                 SizedBox(
                   width: double.infinity,
@@ -534,6 +544,7 @@ class _ClientPicker extends StatelessWidget {
                         name: name,
                         email: email,
                         phone: phoneCtrl.text.trim(),
+                        city: cityCtrl.text.trim(),
                       );
 
                       if (clientsVm.errorMsg != null) {
@@ -588,7 +599,13 @@ class _LineItemRow extends StatefulWidget {
   });
 
   final LineItem item;
-  final void Function({String? name, double? qty, double? rate}) onChanged;
+  final void Function({
+    String? name,
+    double? qty,
+    double? rate,
+    String? hsnCode,
+    String? unit,
+  }) onChanged;
   final VoidCallback onDelete;
 
   @override
@@ -599,7 +616,10 @@ class _LineItemRowState extends State<_LineItemRow> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _qtyCtrl;
   late final TextEditingController _rateCtrl;
+  late final TextEditingController _hsnCtrl;
+  late final TextEditingController _unitCtrl;
   bool _nameFocused = false;
+  bool _detailsExpanded = false;
 
   @override
   void initState() {
@@ -613,6 +633,9 @@ class _LineItemRowState extends State<_LineItemRow> {
     _rateCtrl = TextEditingController(
       text: widget.item.rate == 0 ? '' : _trimTrailingZero(widget.item.rate),
     );
+    _hsnCtrl = TextEditingController(text: widget.item.hsnCode);
+    _unitCtrl = TextEditingController(text: widget.item.unit);
+    _detailsExpanded = widget.item.hsnCode.isNotEmpty;
   }
 
   static String _trimTrailingZero(double v) {
@@ -627,6 +650,8 @@ class _LineItemRowState extends State<_LineItemRow> {
     _nameCtrl.dispose();
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
+    _hsnCtrl.dispose();
+    _unitCtrl.dispose();
     super.dispose();
   }
 
@@ -834,6 +859,62 @@ class _LineItemRowState extends State<_LineItemRow> {
               ],
             ),
           ),
+
+          // ── HSN/SAC + Unit (collapsible) ─────────────────────────────
+          GestureDetector(
+            onTap: () => setState(() => _detailsExpanded = !_detailsExpanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                _detailsExpanded ? 'Hide HSN/SAC & unit' : 'Add HSN/SAC & unit',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          if (_detailsExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _InputPill(
+                      prefix: 'HSN/SAC',
+                      child: TextField(
+                        controller: _hsnCtrl,
+                        onChanged: (v) => widget.onChanged(hsnCode: v),
+                        keyboardType: TextInputType.number,
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        decoration: _collapsed('code', context),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _InputPill(
+                      prefix: 'Unit',
+                      child: TextField(
+                        controller: _unitCtrl,
+                        onChanged: (v) => widget.onChanged(unit: v),
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        decoration: _collapsed('PCS', context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -1101,6 +1182,61 @@ class _TaxDiscountPanel extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 14),
+
+                  // Payment mode
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Payment mode',
+                          style: TextStyle(
+                            color: AppColors.textSecondary(context),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: InvoiceCreateViewModel.paymentModes
+                        .map(
+                          (mode) => GestureDetector(
+                            onTap: () => vm.setPaymentMode(mode),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: vm.paymentMode == mode
+                                    ? AppColors.primary
+                                    : AppColors.background(context),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: vm.paymentMode == mode
+                                      ? AppColors.primary
+                                      : AppColors.border(context),
+                                ),
+                              ),
+                              child: Text(
+                                mode,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: vm.paymentMode == mode
+                                      ? Colors.white
+                                      : AppColors.textSecondary(context),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ],
               ),
             ),
@@ -1170,10 +1306,26 @@ class _TotalsSection extends StatelessWidget {
             valueStyle: TextStyle(color: AppColors.success, fontSize: 13),
           ),
         ],
+        if (vm.roundOff != 0) ...[
+          const SizedBox(height: 4),
+          _TotalRow(
+            label: 'Rounded off',
+            value:
+                '${vm.roundOff > 0 ? '+' : '−'}₹${vm.fmt(vm.roundOff.abs())}',
+            labelStyle: TextStyle(
+              color: AppColors.textSecondary(context),
+              fontSize: 13,
+            ),
+            valueStyle: TextStyle(
+              color: AppColors.textSecondary(context),
+              fontSize: 13,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         _TotalRow(
           label: 'Grand total',
-          value: '₹${vm.fmtFull(vm.grandTotal)}',
+          value: '₹${vm.fmtFull(vm.roundedTotal)}',
           labelStyle: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 16,

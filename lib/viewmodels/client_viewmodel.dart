@@ -60,6 +60,7 @@ class ClientsViewModel extends ChangeNotifier {
     required String name,
     required String email,
     String phone = '',
+    String city = '',
   }) async {
     final docRef = _clientsRef.doc();
     final newClient = ClientItem(
@@ -67,6 +68,7 @@ class ClientsViewModel extends ChangeNotifier {
       name: name,
       email: email,
       phone: phone,
+      city: city,
       totalBilled: 0,
     );
 
@@ -79,6 +81,7 @@ class ClientsViewModel extends ChangeNotifier {
         'name': name,
         'email': email,
         'phone': phone,
+        'city': city,
         'totalBilled': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });

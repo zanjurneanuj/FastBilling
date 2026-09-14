@@ -47,8 +47,12 @@ class ProfileService {
     required String name,
     required String address,
     String? gstNumber,
+    String? state,
     required String currency,
     File? logoFile,
+    String? bankName,
+    String? bankAccountNo,
+    String? bankIfsc,
   }) async {
     final uid = AuthService.currentUser!.uid;
 
@@ -67,7 +71,11 @@ class ProfileService {
     final profile = BusinessProfile(
       uid: uid, name: name, address: address,
       gstNumber: (gstNumber?.isEmpty ?? true) ? null : gstNumber,
+      state: (state?.isEmpty ?? true) ? null : state,
       currency: currency, logoPath: logoPath, logoUrl: logoUrl,
+      bankName: (bankName?.isEmpty ?? true) ? null : bankName,
+      bankAccountNo: (bankAccountNo?.isEmpty ?? true) ? null : bankAccountNo,
+      bankIfsc: (bankIfsc?.isEmpty ?? true) ? null : bankIfsc,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
 

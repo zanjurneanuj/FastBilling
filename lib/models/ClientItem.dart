@@ -3,6 +3,7 @@ class ClientItem {
   final String name;
   final String email;
   final String phone;
+  final String city;
   final double totalBilled;
 
   const ClientItem({
@@ -10,6 +11,7 @@ class ClientItem {
     required this.name,
     required this.email,
     this.phone = '',
+    this.city = '',
     this.totalBilled = 0,
   });
   factory ClientItem.fromMap(String id, Map<String, dynamic> data) {
@@ -18,6 +20,7 @@ class ClientItem {
       name: data['name'] ?? '',
       email: data['email'] ?? '',
       phone: data['phone'] ?? '',
+      city: data['city'] ?? '',
       totalBilled: (data['totalBilled'] ?? 0).toDouble(),
     );
   }

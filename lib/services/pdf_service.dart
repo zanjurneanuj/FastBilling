@@ -54,6 +54,9 @@ class PdfService {
                         if (invoice.senderGst != null)
                           pw.Text('GSTIN: ${invoice.senderGst}',
                               style: pw.TextStyle(fontSize: 9, color: onHeader)),
+                        if (invoice.senderState != null)
+                          pw.Text('State: ${invoice.senderState}',
+                              style: pw.TextStyle(fontSize: 9, color: onHeader)),
                       ],
                     ),
                     pw.Column(
@@ -123,12 +126,14 @@ class PdfService {
               pw.Table(
                 columnWidths: const {
                   0: pw.FlexColumnWidth(4),
-                  1: pw.FlexColumnWidth(1),
-                  2: pw.FlexColumnWidth(2),
+                  1: pw.FlexColumnWidth(1.4),
+                  2: pw.FlexColumnWidth(1.2),
+                  3: pw.FlexColumnWidth(2),
                 },
                 children: [
                   pw.TableRow(children: [
                     _headerCell('DESCRIPTION'),
+                    _headerCell('HSN/SAC'),
                     _headerCell('QTY'),
                     _headerCell('AMOUNT', alignRight: true),
                   ]),
@@ -140,7 +145,14 @@ class PdfService {
                     ),
                     pw.Padding(
                       padding: const pw.EdgeInsets.symmetric(vertical: 6),
-                      child: pw.Text(item.qty.toStringAsFixed(0),
+                      child: pw.Text(item.hsnCode.isEmpty ? '—' : item.hsnCode,
+                          style: const pw.TextStyle(
+                              fontSize: 10, color: PdfColors.grey600)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 6),
+                      child: pw.Text(
+                          '${item.qty.toStringAsFixed(0)} ${item.unit}',
                           style: const pw.TextStyle(fontSize: 11)),
                     ),
                     pw.Padding(
@@ -169,8 +181,11 @@ class PdfService {
                         _fmtFull(invoice.gstAmt)),
                     if (invoice.discountAmt > 0)
                       _totalRow('Discount', '-${_fmtFull(invoice.discountAmt)}'),
+                    if (invoice.roundOff != 0)
+                      _totalRow('Rounded off',
+                          '${invoice.roundOff > 0 ? '+' : '-'}${_fmtFull(invoice.roundOff.abs())}'),
                     pw.SizedBox(height: 6),
-                    pw.Text('Total ₹${_fmtFull(invoice.grandTotal)}',
+                    pw.Text('Total ₹${_fmtFull(invoice.roundedTotal)}',
                         style: pw.TextStyle(
                             fontSize: 16,
                             fontWeight: pw.FontWeight.bold,
@@ -194,6 +209,67 @@ class PdfService {
                           color: PdfColors.grey700)),
                 ),
               ],
+
+              pw.SizedBox(height: 24),
+              pw.Divider(color: PdfColors.grey300),
+              pw.SizedBox(height: 10),
+
+              // ── Payment details / signature footer ───────────────────
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('PAYMENT MODE',
+                          style: pw.TextStyle(
+                              fontSize: 9,
+                              color: PdfColors.grey600,
+                              fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 3),
+                      pw.Text(invoice.paymentMode,
+                          style: const pw.TextStyle(fontSize: 10)),
+                      if (invoice.senderBankName != null) ...[
+                        pw.SizedBox(height: 8),
+                        pw.Text('BANK DETAILS',
+                            style: pw.TextStyle(
+                                fontSize: 9,
+                                color: PdfColors.grey600,
+                                fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 3),
+                        pw.Text(invoice.senderBankName!,
+                            style: const pw.TextStyle(fontSize: 10)),
+                        if (invoice.senderBankAccountNo != null)
+                          pw.Text('A/C: ${invoice.senderBankAccountNo}',
+                              style: const pw.TextStyle(fontSize: 10)),
+                        if (invoice.senderBankIfsc != null)
+                          pw.Text('IFSC: ${invoice.senderBankIfsc}',
+                              style: const pw.TextStyle(fontSize: 10)),
+                      ],
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.SizedBox(
+                        width: 140,
+                        child: pw.Column(children: [
+                          pw.SizedBox(height: 28),
+                          pw.Divider(color: PdfColors.grey400),
+                          pw.Text(
+                              invoice.senderName.isEmpty
+                                  ? 'Authorised Signatory'
+                                  : 'for ${invoice.senderName}',
+                              textAlign: pw.TextAlign.center,
+                              style: const pw.TextStyle(
+                                  fontSize: 9, color: PdfColors.grey600)),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ],
           );
         },

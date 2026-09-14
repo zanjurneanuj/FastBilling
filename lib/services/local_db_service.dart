@@ -19,7 +19,7 @@ class LocalDbService {
   static final LocalDbService instance = LocalDbService._();
 
   static const _dbName       = 'fast_billing.db';
-  static const _dbVersion    = 2;          // ← bumped from 1 → 2
+  static const _dbVersion    = 3;          // ← bumped 1 → 2 → 3
   static const _userTable    = 'users';
   static const _profileTable = 'profiles';
   static const _settingsTable = 'settings'; // ← new
@@ -56,6 +56,11 @@ class LocalDbService {
 
   Future<void> _onUpgrade(Database db, int oldV, int newV) async {
     if (oldV < 2) await _createSettingsTable(db);
+    if (oldV < 3) {
+      for (final col in ['state', 'bank_name', 'bank_account_no', 'bank_ifsc']) {
+        await db.execute('ALTER TABLE $_profileTable ADD COLUMN $col TEXT');
+      }
+    }
   }
 
   // ── Table helpers ─────────────────────────────────────────────────────────
@@ -64,8 +69,10 @@ class LocalDbService {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $_profileTable (
         uid TEXT PRIMARY KEY,
-        name TEXT, address TEXT, gst_number TEXT, currency TEXT,
-        logo_path TEXT, logo_url TEXT, updated_at INTEGER
+        name TEXT, address TEXT, gst_number TEXT, state TEXT, currency TEXT,
+        logo_path TEXT, logo_url TEXT,
+        bank_name TEXT, bank_account_no TEXT, bank_ifsc TEXT,
+        updated_at INTEGER
       )
     ''');
   }

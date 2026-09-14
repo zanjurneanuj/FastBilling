@@ -140,6 +140,11 @@ class _ClientDetailViewState extends State<ClientDetailView> {
                             style: TextStyle(
                                 color: AppColors.textSecondary(context),
                                 fontSize: 13)),
+                      if (_client!.city.isNotEmpty)
+                        Text(_client!.city,
+                            style: TextStyle(
+                                color: AppColors.textSecondary(context),
+                                fontSize: 13)),
                     ]),
               ),
             ]),

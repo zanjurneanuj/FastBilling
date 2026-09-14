@@ -72,6 +72,10 @@ class InvoicePreviewViewModel extends ChangeNotifier {
           senderName: profile?.name ?? '',
           senderAddress: profile?.address ?? '',
           senderGst: profile?.gstNumber,
+          senderState: profile?.state,
+          senderBankName: profile?.bankName,
+          senderBankAccountNo: profile?.bankAccountNo,
+          senderBankIfsc: profile?.bankIfsc,
           issuedDate: DateFormat('d MMM yyyy')
               .format(createdAt ?? dueDate ?? DateTime.now()),
           dueDate: dueDate,

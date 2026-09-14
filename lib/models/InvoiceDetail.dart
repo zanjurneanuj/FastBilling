@@ -16,6 +16,11 @@ class InvoiceDetail {
   final double gstPercent;
   final double discountAmt;
   final String? note;
+  final String paymentMode;
+  final String? senderState;
+  final String? senderBankName;
+  final String? senderBankAccountNo;
+  final String? senderBankIfsc;
 
   const InvoiceDetail({
     required this.id,
@@ -33,6 +38,11 @@ class InvoiceDetail {
     this.gstPercent = 18,
     this.discountAmt = 0,
     this.note,
+    this.paymentMode = 'Cash',
+    this.senderState,
+    this.senderBankName,
+    this.senderBankAccountNo,
+    this.senderBankIfsc,
   });
 
   /// Create InvoiceDetail from a raw Firestore invoice document map.
@@ -46,6 +56,10 @@ class InvoiceDetail {
     String? senderGst,
     String issuedDate = '',
     DateTime? dueDate,
+    String? senderState,
+    String? senderBankName,
+    String? senderBankAccountNo,
+    String? senderBankIfsc,
   }) {
     return InvoiceDetail(
       id: map['id'] ?? map['invoiceNumber'] ?? '',
@@ -69,6 +83,11 @@ class InvoiceDetail {
       gstPercent: (map['gstPercent'] ?? 18).toDouble(),
       discountAmt: (map['discountAmt'] ?? 0).toDouble(),
       note: map['note'],
+      paymentMode: map['paymentMode'] ?? 'Cash',
+      senderState: senderState,
+      senderBankName: senderBankName,
+      senderBankAccountNo: senderBankAccountNo,
+      senderBankIfsc: senderBankIfsc,
     );
   }
 
@@ -82,10 +101,17 @@ class InvoiceDetail {
     return subtotal * gstPercent / 100;
   }
 
-  /// Calculate grand total
+  /// Calculate grand total (before rounding)
   double get grandTotal {
     return subtotal + gstAmt - discountAmt;
   }
+
+  /// Adjustment applied to reach [roundedTotal] — positive rounds up,
+  /// negative rounds down, printed as its own line on the invoice.
+  double get roundOff => roundedTotal - grandTotal;
+
+  /// Grand total rounded to the nearest whole currency unit.
+  double get roundedTotal => grandTotal.roundToDouble();
 
   /// Create a copy with updated values
   InvoiceDetail copyWith({
@@ -104,6 +130,11 @@ class InvoiceDetail {
     double? gstPercent,
     double? discountAmt,
     String? note,
+    String? paymentMode,
+    String? senderState,
+    String? senderBankName,
+    String? senderBankAccountNo,
+    String? senderBankIfsc,
   }) {
     return InvoiceDetail(
       id: id ?? this.id,
@@ -121,6 +152,11 @@ class InvoiceDetail {
       gstPercent: gstPercent ?? this.gstPercent,
       discountAmt: discountAmt ?? this.discountAmt,
       note: note ?? this.note,
+      paymentMode: paymentMode ?? this.paymentMode,
+      senderState: senderState ?? this.senderState,
+      senderBankName: senderBankName ?? this.senderBankName,
+      senderBankAccountNo: senderBankAccountNo ?? this.senderBankAccountNo,
+      senderBankIfsc: senderBankIfsc ?? this.senderBankIfsc,
     );
   }
 }

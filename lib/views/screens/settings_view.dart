@@ -308,7 +308,11 @@ class _SettingsViewState extends State<SettingsView>
                     name: p.name,
                     address: p.address,
                     gstNumber: p.gstNumber,
+                    state: p.state,
                     currency: c,
+                    bankName: p.bankName,
+                    bankAccountNo: p.bankAccountNo,
+                    bankIfsc: p.bankIfsc,
                   );
                   if (mounted) setState(() {});
                 },
@@ -451,9 +455,13 @@ class _SettingsViewState extends State<SettingsView>
       context: context,
       barrierDismissible: false,
       builder: (_) => _EditProfileDialog(
-        initialName:      ProfileService.cached?.name ?? '',
-        initialGst:       ProfileService.cached?.gstNumber ?? '',
-        initialAddress:   ProfileService.cached?.address ?? '',
+        initialName:          ProfileService.cached?.name ?? '',
+        initialGst:           ProfileService.cached?.gstNumber ?? '',
+        initialState:         ProfileService.cached?.state ?? '',
+        initialAddress:       ProfileService.cached?.address ?? '',
+        initialBankName:      ProfileService.cached?.bankName ?? '',
+        initialBankAccountNo: ProfileService.cached?.bankAccountNo ?? '',
+        initialBankIfsc:      ProfileService.cached?.bankIfsc ?? '',
         onSaved: () => setState(() {}), // refresh header once saved
       ),
     );
@@ -566,13 +574,21 @@ class _EditProfileDialog extends StatefulWidget {
   const _EditProfileDialog({
     required this.initialName,
     required this.initialGst,
+    required this.initialState,
     required this.initialAddress,
+    required this.initialBankName,
+    required this.initialBankAccountNo,
+    required this.initialBankIfsc,
     required this.onSaved,
   });
 
   final String initialName;
   final String initialGst;
+  final String initialState;
   final String initialAddress;
+  final String initialBankName;
+  final String initialBankAccountNo;
+  final String initialBankIfsc;
   final VoidCallback onSaved;
 
   @override
@@ -580,9 +596,13 @@ class _EditProfileDialog extends StatefulWidget {
 }
 
 class _EditProfileDialogState extends State<_EditProfileDialog> {
-  late final _nameCtrl    = TextEditingController(text: widget.initialName);
-  late final _gstCtrl     = TextEditingController(text: widget.initialGst);
-  late final _addressCtrl = TextEditingController(text: widget.initialAddress);
+  late final _nameCtrl          = TextEditingController(text: widget.initialName);
+  late final _gstCtrl           = TextEditingController(text: widget.initialGst);
+  late final _stateCtrl         = TextEditingController(text: widget.initialState);
+  late final _addressCtrl       = TextEditingController(text: widget.initialAddress);
+  late final _bankNameCtrl      = TextEditingController(text: widget.initialBankName);
+  late final _bankAccountNoCtrl = TextEditingController(text: widget.initialBankAccountNo);
+  late final _bankIfscCtrl      = TextEditingController(text: widget.initialBankIfsc);
 
   final _formKey = GlobalKey<FormState>();
   bool _saving = false;
@@ -592,7 +612,11 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
   void dispose() {
     _nameCtrl.dispose();
     _gstCtrl.dispose();
+    _stateCtrl.dispose();
     _addressCtrl.dispose();
+    _bankNameCtrl.dispose();
+    _bankAccountNoCtrl.dispose();
+    _bankIfscCtrl.dispose();
     super.dispose();
   }
 
@@ -611,7 +635,11 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
         name:      _nameCtrl.text.trim(),
         address:   _addressCtrl.text.trim(),
         gstNumber: _gstCtrl.text.trim().isEmpty ? null : _gstCtrl.text.trim(),
+        state:     _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
         currency:  ProfileService.cached?.currency ?? 'INR',
+        bankName:      _bankNameCtrl.text.trim().isEmpty ? null : _bankNameCtrl.text.trim(),
+        bankAccountNo: _bankAccountNoCtrl.text.trim().isEmpty ? null : _bankAccountNoCtrl.text.trim(),
+        bankIfsc:      _bankIfscCtrl.text.trim().isEmpty ? null : _bankIfscCtrl.text.trim(),
       );
 
       if (!mounted) return;
@@ -661,12 +689,55 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
               ),
               const SizedBox(height: 12),
               TextFormField(
+                controller: _stateCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'State (optional)',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
                 controller: _addressCtrl,
                 style: TextStyle(color: AppColors.textPrimary(context)),
                 decoration: const InputDecoration(
                   labelText: 'Address',
                 ),
                 maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              Text('Bank details (optional)',
+                  style: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _bankNameCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'Bank name',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _bankAccountNoCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'Account number',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _bankIfscCtrl,
+                style: TextStyle(color: AppColors.textPrimary(context)),
+                decoration: const InputDecoration(
+                  labelText: 'IFSC code',
+                ),
+                textCapitalization: TextCapitalization.characters,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
