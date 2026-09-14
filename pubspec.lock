@@ -678,7 +678,7 @@ packages:
     source: hosted
     version: "1.0.0"
   network_info_plus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: network_info_plus
       sha256: "2866dadcbee2709e20d67737a1556f5675b8b0cdcf2c1659ba74bc21bffede4f"

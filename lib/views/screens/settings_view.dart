@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/theme_provider.dart';
@@ -121,9 +124,9 @@ class _SettingsViewState extends State<SettingsView>
                 _SettingsTile(
                   icon: Icons.palette_outlined,
                   label: 'Logo & accent color',
-                  trailing: _ColorDot(),
+                  trailing: _ColorDot(color: PdfTemplateService.selected.accentColor),
                   showChevron: true,
-                  onTap: () {},
+                  onTap: () => _showLogoAccentSheet(context),
                 ),
                 _Divider(),
                 _SettingsTile(
@@ -232,6 +235,127 @@ class _SettingsViewState extends State<SettingsView>
   }
 
   // ── Pickers / dialogs ──────────────────────────────────────────────────────
+
+  void _showLogoAccentSheet(BuildContext context) {
+    final profile = ProfileService.cached;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface(context),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SheetHandle(),
+            const SizedBox(height: 16),
+            Text('Logo & accent color',
+                style: TextStyle(
+                    color: AppColors.textPrimary(sheetContext),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17)),
+            const SizedBox(height: 16),
+
+            // ── Logo ────────────────────────────────────────────
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.background(sheetContext),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border(sheetContext)),
+                  ),
+                  child: (profile?.logoPath != null &&
+                          File(profile!.logoPath!).existsSync())
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.file(File(profile.logoPath!),
+                              fit: BoxFit.cover),
+                        )
+                      : Icon(Icons.storefront_outlined,
+                          color: AppColors.textSecondary(sheetContext)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text('Business logo',
+                      style: TextStyle(
+                          color: AppColors.textPrimary(sheetContext),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final x = await ImagePicker().pickImage(
+                        source: ImageSource.gallery,
+                        maxWidth: 512,
+                        imageQuality: 80);
+                    if (x == null) return;
+                    final p = ProfileService.cached;
+                    if (p == null) return;
+                    await ProfileService.save(
+                      name: p.name,
+                      address: p.address,
+                      gstNumber: p.gstNumber,
+                      state: p.state,
+                      currency: p.currency,
+                      logoFile: File(x.path),
+                      bankName: p.bankName,
+                      bankAccountNo: p.bankAccountNo,
+                      bankIfsc: p.bankIfsc,
+                    );
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text('Change',
+                      style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+            Divider(color: AppColors.border(sheetContext)),
+            const SizedBox(height: 16),
+
+            // ── Accent color (set via PDF template) ──────────────
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: PdfTemplateService.selected.accentColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border(sheetContext)),
+                ),
+              ),
+              title: Text('Accent color',
+                  style: TextStyle(
+                      color: AppColors.textPrimary(sheetContext),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                  'Set via PDF template — ${PdfTemplateService.selected.name}',
+                  style: TextStyle(
+                      color: AppColors.textSecondary(sheetContext),
+                      fontSize: 12)),
+              trailing: Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary(sheetContext), size: 18),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showPdfTemplateDialog(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showThemePicker(BuildContext context, ThemeProvider tp) {
     showModalBottomSheet(
@@ -899,11 +1023,13 @@ class _Divider extends StatelessWidget {
 }
 
 class _ColorDot extends StatelessWidget {
+  const _ColorDot({required this.color});
+  final Color color;
+
   @override
   Widget build(BuildContext context) => Container(
     width: 22, height: 22,
-    decoration: const BoxDecoration(
-        color: AppColors.primary, shape: BoxShape.circle),
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
   );
 }
 

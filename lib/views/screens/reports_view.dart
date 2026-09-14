@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/TopClient.dart';
@@ -183,7 +184,7 @@ class _ReportsViewState extends State<ReportsView>
                             ),
                             const Spacer(),
                             GestureDetector(
-                              onTap: () {},
+                              onTap: () => context.push('/clients'),
                               child: Text(
                                 'See all',
                                 style: TextStyle(

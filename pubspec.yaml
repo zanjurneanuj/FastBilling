@@ -40,6 +40,7 @@ dependencies:
   path: ^1.9.1
   firebase_storage: ^12.2.0
   device_info_plus: ^10.1.2
+  network_info_plus: ^7.0.0
   package_info_plus: ^9.0.1
   crypto: ^3.0.7
   esc_pos_utils_plus: ^2.0.4

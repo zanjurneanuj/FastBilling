@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 
 // ESC/POS byte generation (text, columns, qr, cut) — unchanged, still used
 // for every transport including the raw WiFi socket below.
@@ -121,27 +123,60 @@ class PosPrinterService {
     return lastScanResults;
   }
 
+  /// Real LAN discovery: reads this device's own Wi-Fi IP to find the /24
+  /// subnet, then sweeps it for hosts listening on raw TCP port 9100 — the
+  /// port virtually every thermal receipt printer listens on. No mDNS, so a
+  /// printer needs to actually accept a bare TCP connect on 9100 to show up;
+  /// that's the same thing _connectWifi below relies on, so anything found
+  /// here is guaranteed connectable.
   static Future<List<PosPrinterDevice>> _scanWifi() async {
-    // TODO: replace with real LAN discovery (mDNS, or a quick port-9100 sweep
-    // across the subnet). Left as static entries here so the UI is testable
-    // without hardware — thermal printers on the same network almost always
-    // listen on raw TCP port 9100, which _connectWifi below actually uses.
-    await Future.delayed(const Duration(milliseconds: 800));
-    lastScanResults = const [
-      PosPrinterDevice(
-        id: '192.168.1.42',
-        name: 'Epson TM-T20 III',
-        type: PrinterConnectionType.wifi,
-        subtitle: '192.168.1.42 · Thermal 58mm',
-      ),
-      PosPrinterDevice(
-        id: '192.168.1.51',
-        name: 'Rongta RP58',
-        type: PrinterConnectionType.wifi,
-        subtitle: '192.168.1.51 · Thermal 58mm',
-      ),
-    ];
+    const port = 9100;
+    const perHostTimeout = Duration(milliseconds: 350);
+    const batchSize = 32;
+
+    String? ip;
+    try {
+      ip = await NetworkInfo().getWifiIP();
+    } catch (e) {
+      debugPrint('[PosPrinter] could not read Wi-Fi IP: $e');
+    }
+
+    final parts = ip?.split('.');
+    if (parts == null || parts.length != 4) {
+      // Not on Wi-Fi, or the platform wouldn't hand back an IP — nothing to
+      // scan. Empty result reads as "no printers found" in the UI.
+      lastScanResults = const [];
+      return lastScanResults;
+    }
+    final subnet = '${parts[0]}.${parts[1]}.${parts[2]}';
+
+    final found = <PosPrinterDevice>[];
+    for (var start = 1; start <= 254; start += batchSize) {
+      final end = (start + batchSize - 1).clamp(1, 254);
+      final hosts = await Future.wait([
+        for (var h = start; h <= end; h++) _probeHost('$subnet.$h', port, perHostTimeout),
+      ]);
+      found.addAll(hosts.whereType<PosPrinterDevice>());
+    }
+
+    lastScanResults = found;
     return lastScanResults;
+  }
+
+  static Future<PosPrinterDevice?> _probeHost(
+      String host, int port, Duration timeout) async {
+    try {
+      final socket = await Socket.connect(host, port, timeout: timeout);
+      unawaited(socket.close());
+      return PosPrinterDevice(
+        id: host,
+        name: 'Network printer',
+        type: PrinterConnectionType.wifi,
+        subtitle: '$host · Port $port',
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<List<PosPrinterDevice>> _scanUsb() async {

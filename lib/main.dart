@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fast_billing/services/PosPrinterService.dart';
+import 'package:fast_billing/services/PdfTemplateService.dart';
 import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/services/ProfileService.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -39,6 +40,7 @@ Future<void> _bootstrap() async {
     try {
       if (AuthService.isLoggedIn) await ProfileService.load();
       await PosPrinterService.loadSettings();
+      await PdfTemplateService.load();
     } catch (e, st) {
       debugPrint('[Bootstrap] startup data load failed: $e\n$st');
     }
