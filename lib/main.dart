@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fast_billing/services/PosPrinterService.dart';
 import 'package:fast_billing/services/PdfTemplateService.dart';
 import 'package:fast_billing/services/SubscriptionService.dart';
+import 'package:fast_billing/services/IntroService.dart';
 import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/services/ProfileService.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -26,6 +27,13 @@ Future<void> _bootstrap() async {
     FlutterError.presentError(details);
     debugPrint('[FlutterError] ${details.exceptionAsString()}');
   };
+
+  // Local-only, must complete before the router's first redirect decision.
+  try {
+    await IntroService.load();
+  } catch (e, st) {
+    debugPrint('[Bootstrap] intro flag load failed: $e\n$st');
+  }
 
   var firebaseReady = true;
   try {

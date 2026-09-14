@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../services/PaymentService.dart';
 import '../../services/SubscriptionService.dart';
 import '../../utils/app_colors.dart';
 
-/// Soft paywall shown once an account has used all its free invoices.
-/// No payment processing happens here yet — the "Upgrade" button just
-/// tells the user what's coming. Swap it for real billing later without
-/// touching any of the gating logic in [SubscriptionService].
-class UpgradeView extends StatelessWidget {
+/// Paywall / plan screen. Reachable both when a user is actually blocked
+/// (out of free invoices) and voluntarily from the "Free plan" card in
+/// Settings — copy adapts to which case it is. The "Upgrade" button opens
+/// a real Razorpay checkout (see [PaymentService] for the demo-key note);
+/// until a real key is configured it falls back to a "coming soon" message
+/// instead of launching a checkout that would just show Razorpay's own
+/// "invalid key" error.
+class UpgradeView extends StatefulWidget {
   const UpgradeView({super.key});
+
+  @override
+  State<UpgradeView> createState() => _UpgradeViewState();
+}
+
+class _UpgradeViewState extends State<UpgradeView> {
+  bool _processing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -85,21 +96,34 @@ class UpgradeView extends StatelessWidget {
               _Benefit(icon: Icons.support_agent_rounded, text: 'Priority support'),
               const Spacer(),
               if (!isPremium) ...[
+                Text(
+                  '${PaymentService.premiumAmountLabel} · one-time',
+                  style: TextStyle(
+                      color: AppColors.textSecondary(context), fontSize: 12),
+                ),
+                const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () => _showComingSoon(context),
+                    onPressed: _processing ? null : _startUpgrade,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                     ),
-                    child: const Text('Upgrade',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700)),
+                    child: _processing
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: Colors.white),
+                          )
+                        : const Text('Upgrade',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -117,13 +141,42 @@ class UpgradeView extends StatelessWidget {
     );
   }
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-            "Upgrades aren't open yet — we'll notify you as soon as they are."),
-        behavior: SnackBarBehavior.floating,
-      ),
+  void _startUpgrade() {
+    if (!PaymentService.isConfigured) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              "Upgrades aren't open yet — we'll notify you as soon as they are."),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _processing = true);
+    PaymentService.startCheckout(
+      onSuccess: () {
+        if (!mounted) return;
+        setState(() => _processing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("You're upgraded! Enjoy unlimited invoices."),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.success,
+          ),
+        );
+      },
+      onError: (message) {
+        if (!mounted) return;
+        setState(() => _processing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.error,
+          ),
+        );
+      },
     );
   }
 }

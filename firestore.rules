@@ -1,0 +1,76 @@
+rules_version = '2';
+
+// Fast Billing — Firestore security rules.
+//
+// IMPORTANT: this file is not deployed automatically. Copy it into
+// Firebase Console → Firestore Database → Rules (or run
+// `firebase deploy --only firestore:rules` if you have the Firebase CLI
+// set up for this project), after reviewing it against whatever rules are
+// currently live — this was written from the collections the app code
+// actually uses, but it replaces the whole ruleset rather than merging
+// with it, so double-check nothing else depends on rules not covered here
+// before deploying.
+//
+// Schema covered (see lib/ for where each collection is written):
+//   users/{uid}                        — profile stub (name/email), written on sign-in
+//   users/{uid}/invoices/{id}          — one user's invoices
+//   users/{uid}/clients/{id}           — one user's clients
+//   users/{uid}/catalog/{id}           — one user's product catalog
+//   users/{uid}/devices/{id}           — login/device history
+//   business_profiles/{uid}            — editable business profile (name, GST, logo, bank, PDF template)
+//   subscriptions/{uid}                — free-tier/premium flag (see lib/services/SubscriptionService.dart)
+//
+// Admin access (the web panel in admin/) is granted by email allowlist —
+// keep ADMIN_EMAILS here in sync with admin/app.js's ADMIN_EMAILS.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        request.auth.token.email in [
+          'zanjurneanuj@gmail.com'
+        ];
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+      allow read: if isAdmin();
+
+      match /invoices/{invoiceId} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+      match /clients/{clientId} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+      match /catalog/{productId} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+      match /devices/{deviceId} {
+        allow read, write: if isOwner(uid);
+        allow read: if isAdmin();
+      }
+    }
+
+    match /business_profiles/{uid} {
+      allow read, write: if isOwner(uid);
+      allow read: if isAdmin();
+    }
+
+    // Owner can write their own subscription doc too — that's how the
+    // client-side Razorpay demo flow marks itself premium on payment
+    // success (see PaymentService.dart's doc comment: this is fine for a
+    // demo/soft launch, but a real production billing setup should verify
+    // payments server-side via a webhook instead of trusting the client).
+    match /subscriptions/{uid} {
+      allow read, write: if isOwner(uid);
+      allow read, write: if isAdmin();
+    }
+  }
+}

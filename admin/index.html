@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fast Billing — Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ── Login screen ───────────────────────────────────────────────── -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <div class="brand">
+        <div class="brand-badge">FB</div>
+        <h1>Fast Billing Admin</h1>
+      </div>
+      <p class="muted">Sign in with an admin account to continue.</p>
+
+      <form id="login-form">
+        <label>Email
+          <input type="email" id="email-input" autocomplete="username" required />
+        </label>
+        <label>Password
+          <input type="password" id="password-input" autocomplete="current-password" required />
+        </label>
+        <button type="submit" class="btn-primary" id="login-submit">Sign in</button>
+      </form>
+
+      <div class="divider"><span>or</span></div>
+
+      <button id="google-signin" class="btn-secondary">Sign in with Google</button>
+
+      <p id="login-error" class="error-text" hidden></p>
+    </div>
+  </div>
+
+  <!-- ── Access denied screen ───────────────────────────────────────── -->
+  <div id="denied-screen" class="screen" hidden>
+    <div class="login-card">
+      <div class="brand">
+        <div class="brand-badge">FB</div>
+        <h1>Access denied</h1>
+      </div>
+      <p class="muted">
+        Signed in as <strong id="denied-email"></strong>, which isn't on the
+        admin allowlist. Ask an existing admin to add your email in
+        <code>firestore.rules</code> and <code>app.js</code>.
+      </p>
+      <button id="denied-signout" class="btn-secondary">Sign out</button>
+    </div>
+  </div>
+
+  <!-- ── Dashboard ──────────────────────────────────────────────────── -->
+  <div id="dashboard-screen" class="screen" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-badge">FB</div>
+        <span>Fast Billing Admin</span>
+      </div>
+      <div class="topbar-right">
+        <span id="admin-email" class="muted"></span>
+        <button id="refresh-btn" class="btn-ghost">Refresh</button>
+        <button id="signout-btn" class="btn-ghost">Sign out</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Total users</span>
+          <span class="stat-value" id="stat-users">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total invoices</span>
+          <span class="stat-value" id="stat-invoices">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total revenue</span>
+          <span class="stat-value" id="stat-revenue">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Premium accounts</span>
+          <span class="stat-value" id="stat-premium">—</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Users</h2>
+          <input type="search" id="user-search" placeholder="Search name or email…" />
+        </div>
+        <div class="table-wrap">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Invoices</th>
+                <th>Plan</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="5" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Recent invoices</h2>
+        </div>
+        <div class="table-wrap">
+          <table id="invoices-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Client</th>
+                <th>Owner (uid)</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="invoices-tbody">
+              <tr><td colspan="6" class="muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Firebase (modular SDK via CDN, no build step needed) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>

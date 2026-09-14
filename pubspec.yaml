@@ -46,6 +46,9 @@ dependencies:
   esc_pos_utils_plus: ^2.0.4
   unified_esc_pos_printer: ^3.4.0
 
+  # Payments
+  razorpay_flutter: ^1.4.0
+
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 import 'package:fast_billing/services/auth_service.dart';
+import 'package:fast_billing/services/IntroService.dart';
 import 'package:fast_billing/utils/go_router_refresh_stream.dart';
 import 'package:fast_billing/services/ProfileService.dart';
 import 'package:fast_billing/views/screens/PdfTemplateView.dart';
@@ -12,6 +13,7 @@ import 'providers/locale_provider.dart';
 import 'providers/theme_provider.dart';
 import 'utils/app_colors.dart';
 import 'utils/app_strings.dart';
+import 'views/screens/intro_view.dart';
 import 'views/screens/login_view.dart';
 import 'views/screens/onboarding_view.dart';
 import 'views/screens/home_view.dart';
@@ -185,9 +187,14 @@ final GoRouter _router = GoRouter(
     ),
   ),
   redirect: (context, state) {
+    final loc = state.matchedLocation;
+
+    if (!IntroService.hasSeenIntro) {
+      return loc == '/intro' ? null : '/intro';
+    }
+
     final loggedIn   = AuthService.isLoggedIn;
     final hasProfile = ProfileService.hasProfile;
-    final loc = state.matchedLocation;
     final onAuth = loc == '/login' || loc == '/register';
 
     if (!loggedIn) return onAuth ? null : '/login';
@@ -196,6 +203,7 @@ final GoRouter _router = GoRouter(
     return null;
   },
   routes: [
+    GoRoute(path: '/intro',           builder: (c, s) => const IntroView()),
     GoRoute(path: '/login',           builder: (c, s) => const LoginView()),
     GoRoute(path: '/register', builder: (c, s) => const RegisterView()), 
     GoRoute(path: '/onboarding',      builder: (c, s) => const OnboardingView()),
