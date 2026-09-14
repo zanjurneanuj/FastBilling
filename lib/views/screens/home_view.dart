@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_strings.dart';
+import '../../utils/invoice_gate.dart';
 import '../../viewmodels/dashboard_viewmodel.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/invoice_card.dart';
@@ -63,7 +64,7 @@ class _HomeViewState extends State<HomeView> {
       // FAB only on Home tab
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
-        onPressed: () => context.push('/invoices/create'),
+        onPressed: () => openNewInvoice(context),
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       )
@@ -308,7 +309,7 @@ class _DashboardTab extends StatelessWidget {
                         title: 'No invoices yet',
                         subtitle: 'Tap + to create your first invoice.',
                         actionLabel: 'Create Invoice',
-                        onAction: () => context.push('/invoices/create'),
+                        onAction: () => openNewInvoice(context),
                       )
                     else
                       ...vm.recentInvoices.map(
@@ -680,7 +681,7 @@ class _QuickActions extends StatelessWidget {
             icon: Icons.add,
             label: 'New\nInvoice',
             filled: true,
-            onTap: () => context.push('/invoices/create'),
+            onTap: () => openNewInvoice(context),
           ),
           const SizedBox(width: 10),
           _QACard(

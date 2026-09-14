@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fast_billing/services/PosPrinterService.dart';
 import 'package:fast_billing/services/PdfTemplateService.dart';
+import 'package:fast_billing/services/SubscriptionService.dart';
 import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/services/ProfileService.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -38,7 +39,10 @@ Future<void> _bootstrap() async {
 
   if (firebaseReady) {
     try {
-      if (AuthService.isLoggedIn) await ProfileService.load();
+      if (AuthService.isLoggedIn) {
+        await ProfileService.load();
+        await SubscriptionService.refresh();
+      }
       await PosPrinterService.loadSettings();
       await PdfTemplateService.load();
     } catch (e, st) {

@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../services/SubscriptionService.dart';
 
 class LineItem {
   final String id;
@@ -279,6 +283,7 @@ class InvoiceCreateViewModel extends ChangeNotifier {
       isSaving = false;
       isDraftSaved = true;
       notifyListeners();
+      if (!isEditing) unawaited(SubscriptionService.refresh());
 
       return true;
     } catch (e, stackTrace) {
@@ -335,6 +340,7 @@ class InvoiceCreateViewModel extends ChangeNotifier {
 
       isSaving = false;
       notifyListeners();
+      if (!isEditing) unawaited(SubscriptionService.refresh());
       return true;
     } catch (e) {
       debugPrint('Error saving invoice: $e');

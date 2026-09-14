@@ -10,6 +10,7 @@ import '../../providers/locale_provider.dart';
 import '../../services/PdfTemplateService.dart';
 import '../../services/PosPrinterService.dart';
 import '../../services/ProfileService.dart';
+import '../../services/SubscriptionService.dart';
 import '../../services/auth_service.dart';
 import '../../models/PdfTemplate.dart';
 import '../../utils/app_colors.dart';
@@ -39,12 +40,15 @@ class _SettingsViewState extends State<SettingsView>
     // Rebuild the "POS printer" tile whenever connection state changes,
     // whether from this screen or the printer connect screen.
     PosPrinterService.changed.addListener(_onPrinterChanged);
+    // Rebuild the subscription usage tile after a new invoice is saved.
+    SubscriptionService.changed.addListener(_onSubscriptionChanged);
   }
 
   @override
   void dispose() {
     PdfTemplateService.changed.removeListener(_onPdfTemplateChanged);
     PosPrinterService.changed.removeListener(_onPrinterChanged);
+    SubscriptionService.changed.removeListener(_onSubscriptionChanged);
     super.dispose();
   }
 
@@ -53,6 +57,10 @@ class _SettingsViewState extends State<SettingsView>
   }
 
   void _onPrinterChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onSubscriptionChanged() {
     if (mounted) setState(() {});
   }
 
@@ -115,6 +123,10 @@ class _SettingsViewState extends State<SettingsView>
                 sub:         _businessSub,
                 onEdit:      () => _showEditProfileDialog(context),
               ),
+              const SizedBox(height: 16),
+
+              // ── Subscription usage ─────────────────────────────────
+              _SubscriptionCard(onTap: () => context.push('/upgrade')),
               const SizedBox(height: 24),
 
               // ── Branding & Output ─────────────────────────────────
@@ -625,6 +637,92 @@ class _SettingsViewState extends State<SettingsView>
 }
 
 // ─── Profile Card ─────────────────────────────────────────────────────────────
+
+// ─── Subscription Usage Card ────────────────────────────────────────────────
+
+class _SubscriptionCard extends StatelessWidget {
+  const _SubscriptionCard({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPremium = SubscriptionService.isPremium;
+    final used = SubscriptionService.invoiceCount;
+    final limit = SubscriptionService.freeInvoiceLimit;
+    final progress = isPremium ? 1.0 : (used / limit).clamp(0.0, 1.0);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    isPremium
+                        ? Icons.workspace_premium_rounded
+                        : Icons.receipt_long_outlined,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    isPremium ? 'Premium plan' : 'Free plan',
+                    style: TextStyle(
+                        color: AppColors.textPrimary(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (!isPremium)
+                  Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary(context), size: 18),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isPremium
+                  ? 'Unlimited invoices'
+                  : '$used of $limit free invoices used',
+              style: TextStyle(
+                  color: AppColors.textSecondary(context), fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: AppColors.background(context),
+                valueColor: AlwaysStoppedAnimation(
+                  !isPremium && used >= limit
+                      ? AppColors.error
+                      : AppColors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({

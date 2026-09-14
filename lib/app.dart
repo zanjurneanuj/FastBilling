@@ -23,6 +23,7 @@ import 'views/screens/client_detail_view.dart';
 import 'views/screens/catalog_view.dart';
 import 'views/screens/reports_view.dart';
 import 'views/screens/settings_view.dart';
+import 'views/screens/upgrade_view.dart';
 
 class ZanvoyApp extends StatelessWidget {
   const ZanvoyApp({super.key});
@@ -215,6 +216,7 @@ final GoRouter _router = GoRouter(
     ),
     GoRoute(path: '/catalog',         builder: (c, s) => const CatalogView()),
     GoRoute(path: '/reports',         builder: (c, s) => const ReportsView()),
+    GoRoute(path: '/upgrade',         builder: (c, s) => const UpgradeView()),
     GoRoute(
       path: '/settings',
       builder: (c, s) => const SettingsView(),

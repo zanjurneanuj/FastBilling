@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/InvoiceListItem.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/invoice_gate.dart';
 import '../../utils/invoice_status.dart';
 import '../../viewmodels/invoice_list_viewmodel.dart';
 import '../widgets/client_avatar.dart';
@@ -210,7 +211,7 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
 
           // ── FAB ─────────────────────────────────────────────────────────
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => context.push('/invoices/create'),
+            onPressed: () => openNewInvoice(context),
             backgroundColor: AppColors.primary,
             icon: const Icon(Icons.add, color: Colors.white),
             label: const Text('New',
