@@ -4,6 +4,7 @@ import 'package:fast_billing/services/ProfileService.dart';
 import 'package:fast_billing/views/screens/PdfTemplateView.dart';
 import 'package:fast_billing/views/screens/register_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -44,8 +45,11 @@ class ZanvoyApp extends StatelessWidget {
       // ── Localisation ───────────────────────────────────────────────────────
       locale: locale,
       supportedLocales: LocaleProvider.supportedLocales,
-      // Uncomment when you add .arb files:
-      // localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
 
       routerConfig: _router,
     );

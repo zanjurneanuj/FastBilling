@@ -29,7 +29,9 @@ class _ClientsViewState extends State<ClientsView>
     super.didChangeDependencies();
     if (!_loaded) {
       _loaded = true;
-      context.read<ClientsViewModel>().loadClients();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<ClientsViewModel>().loadClients();
+      });
     }
   }
 
