@@ -10,6 +10,11 @@ class IntroService {
 
   static bool hasSeenIntro = false;
 
+  /// True between finishing onboarding and leaving the welcome screen
+  /// (referral code + free templates). In-memory only: if the app is
+  /// closed mid-way, the user simply lands on Home next time.
+  static bool welcomePending = false;
+
   /// Call once at startup, before runApp — must complete before the
   /// router's first redirect decision so a returning user never briefly
   /// flashes the intro screen.

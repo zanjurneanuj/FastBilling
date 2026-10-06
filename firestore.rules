@@ -18,7 +18,10 @@ rules_version = '2';
 //   users/{uid}/catalog/{id}           — one user's product catalog
 //   users/{uid}/devices/{id}           — login/device history
 //   business_profiles/{uid}            — editable business profile (name, GST, logo, bank, PDF template)
-//   subscriptions/{uid}                — free-tier/premium flag (see lib/services/SubscriptionService.dart)
+//   subscriptions/{uid}                — free-tier/premium status (see lib/services/SubscriptionService.dart)
+//   payments/{id}                      — Razorpay checkout ledger (see lib/services/PaymentService.dart)
+//   referralCodes/{code}               — refer & earn code → owner uid (see lib/services/ReferralService.dart)
+//   referrals/{newUserUid}             — who referred whom; referrer bonus is counted from these
 //
 // Admin access (the web panel in admin/) is granted by email allowlist —
 // keep ADMIN_EMAILS here in sync with admin/app.js's ADMIN_EMAILS.
@@ -71,6 +74,47 @@ service cloud.firestore {
     match /subscriptions/{uid} {
       allow read, write: if isOwner(uid);
       allow read, write: if isAdmin();
+    }
+
+    // Ledger of every Razorpay checkout outcome (success / failed /
+    // cancelled / activation_failed) — see PaymentService. Append-only:
+    // users can add their own entries and read them back, never edit or
+    // delete; admins can read everything.
+    match /payments/{paymentId} {
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status in
+             ['success', 'failed', 'cancelled', 'activation_failed'];
+      allow read: if request.auth != null
+        && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // Refer & earn (see ReferralService).
+    // referralCodes/{CODE} → owner uid. Fetched by exact code only (no
+    // listing, so codes can't be enumerated); claimed once, never changed.
+    match /referralCodes/{code} {
+      allow get: if request.auth != null;
+      allow list: if isAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && code.size() == 6;
+    }
+
+    // referrals/{newUserUid}: written once by the new user. The code must
+    // exist, must belong to the stated referrer, and can't be their own.
+    // The referrer reads (counts) the docs naming them to get their bonus.
+    match /referrals/{refereeUid} {
+      allow create: if request.auth != null
+        && request.auth.uid == refereeUid
+        && request.resource.data.refereeUid == refereeUid
+        && request.resource.data.referrerUid != refereeUid
+        && exists(/databases/$(database)/documents/referralCodes/$(request.resource.data.code))
+        && get(/databases/$(database)/documents/referralCodes/$(request.resource.data.code)).data.uid
+             == request.resource.data.referrerUid;
+      allow read: if request.auth != null
+        && (request.auth.uid == refereeUid
+            || resource.data.referrerUid == request.auth.uid
+            || isAdmin());
     }
   }
 }

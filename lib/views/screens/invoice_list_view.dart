@@ -25,19 +25,26 @@ import '../widgets/empty_state.dart';
 /// that wraps *all* routes (e.g. via ShellRoute). Self-providing here is
 /// the safest fix regardless of how the router is structured elsewhere.
 class InvoiceListView extends StatelessWidget {
-  const InvoiceListView({super.key});
+  const InvoiceListView({super.key, this.initialFilter, this.showBack = false});
+
+  /// One of [InvoiceListViewModel.filters] (any casing), e.g. 'paid'.
+  final String? initialFilter;
+
+  /// True when pushed as its own page (not the bottom-nav tab).
+  final bool showBack;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => InvoiceListViewModel(),
-      child: const _InvoiceListScreen(),
+      create: (_) => InvoiceListViewModel(initialFilter: initialFilter),
+      child: _InvoiceListScreen(showBack: showBack),
     );
   }
 }
 
 class _InvoiceListScreen extends StatefulWidget {
-  const _InvoiceListScreen();
+  const _InvoiceListScreen({required this.showBack});
+  final bool showBack;
 
   @override
   State<_InvoiceListScreen> createState() => _InvoiceListScreenState();
@@ -46,7 +53,7 @@ class _InvoiceListScreen extends StatefulWidget {
 class _InvoiceListScreenState extends State<_InvoiceListScreen> {
   final _searchCtrl = TextEditingController();
 
-  static const _filters = ['All', 'Draft', 'Sent', 'Paid', 'Overdue'];
+  static const _filters = InvoiceListViewModel.filters;
 
   @override
   void initState() {
@@ -76,9 +83,17 @@ class _InvoiceListScreenState extends State<_InvoiceListScreen> {
               children: [
                 // ── Header ──────────────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 0),
+                  padding: EdgeInsets.fromLTRB(widget.showBack ? 4 : 20, 16, 16, 0),
                   child: Row(
                     children: [
+                      if (widget.showBack)
+                        IconButton(
+                          icon: Icon(Icons.arrow_back_rounded,
+                              color: AppColors.textPrimary(context)),
+                          onPressed: () => context.canPop()
+                              ? context.pop()
+                              : context.go('/home'),
+                        ),
                       Text('Invoices',
                           style: TextStyle(
                               color: AppColors.textPrimary(context),

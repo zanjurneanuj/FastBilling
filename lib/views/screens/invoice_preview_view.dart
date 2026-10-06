@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../utils/invoice_share_message.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +17,9 @@ import '../../utils/invoice_status.dart';
 import '../../viewmodels/InvoicePreviewViewModel.dart';
 import '../widgets/empty_state.dart';
 import 'PrintReceiptPreviewView.dart';
+import 'section_arrange_view.dart';
+import '../widgets/cached_pdf_preview.dart';
+import '../../utils/app_features.dart';
 
 // ─── PDF / print actions ────────────────────────────────────────────────────
 // Shared by the top-bar print icon and the bottom-bar PDF/Share buttons.
@@ -19,16 +27,235 @@ import 'PrintReceiptPreviewView.dart';
 Future<void> _printPdf(BuildContext context, InvoicePreviewViewModel vm) async {
   final inv = vm.invoice;
   if (inv == null) return;
-  final doc = await PdfService.buildInvoicePdf(inv, vm.activeTemplate);
-  await Printing.layoutPdf(onLayout: (_) => doc.save());
+  final bytes = await PdfService.buildInvoicePdfBytes(
+    inv,
+    vm.activeTemplate,
+    sections: PdfTemplateService.sections,
+  );
+  await Printing.layoutPdf(onLayout: (_) => bytes);
 }
 
+/// Share opens a sheet with a ready-made message (amount, due date, UPI /
+/// bank details) the user can edit, then sends the PDF *with* that message
+/// — on WhatsApp the text becomes the document's caption.
 Future<void> _sharePdf(BuildContext context, InvoicePreviewViewModel vm) async {
   final inv = vm.invoice;
   if (inv == null) return;
-  final doc = await PdfService.buildInvoicePdf(inv, vm.activeTemplate);
-  final bytes = await doc.save();
-  await Printing.sharePdf(bytes: bytes, filename: '${inv.invoiceNumber}.pdf');
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface(context),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _ShareSheet(vm: vm),
+  );
+}
+
+class _ShareSheet extends StatefulWidget {
+  const _ShareSheet({required this.vm});
+  final InvoicePreviewViewModel vm;
+
+  @override
+  State<_ShareSheet> createState() => _ShareSheetState();
+}
+
+class _ShareSheetState extends State<_ShareSheet> {
+  late final _msg = TextEditingController(
+    text: InvoiceShareMessage.build(widget.vm.invoice!),
+  );
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _msg.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final inv = widget.vm.invoice!;
+    setState(() => _busy = true);
+    try {
+      final bytes = await PdfService.buildInvoicePdfBytes(
+        inv,
+        widget.vm.activeTemplate,
+        sections: PdfTemplateService.sections,
+      );
+      final dir = await getTemporaryDirectory();
+      final safe = inv.invoiceNumber.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+      final file = File('${dir.path}/$safe.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+
+      // Some apps drop the caption on documents — keep it on the clipboard
+      // so it can be pasted straight after.
+      await Clipboard.setData(ClipboardData(text: _msg.text));
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf', name: '$safe.pdf')],
+        text: _msg.text,
+        subject: 'Invoice ${inv.invoiceNumber}',
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share the invoice: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border(context),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.chat_rounded,
+                    color: Color(0xFF25D366),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Share on WhatsApp',
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'The PDF is sent with this message — edit it if you like.',
+              style: TextStyle(
+                color: AppColors.textSecondary(context),
+                fontSize: 12.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.42,
+              ),
+              child: TextField(
+                controller: _msg,
+                maxLines: null,
+                style: TextStyle(
+                  color: AppColors.textPrimary(context),
+                  fontSize: 13.5,
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: AppColors.background(context),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.border(context)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: _msg.text));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Message copied'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 52),
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copy'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _busy ? null : _send,
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(0, 52),
+                      backgroundColor: const Color(0xFF25D366),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                    label: const Text(
+                      'Send PDF + message',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 void _printReceiptPos(BuildContext context, InvoicePreviewViewModel vm) {
@@ -36,27 +263,38 @@ void _printReceiptPos(BuildContext context, InvoicePreviewViewModel vm) {
   if (inv == null) return;
 
   if (!PosPrinterService.isConnected) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Connect a printer in Settings first.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Connect a printer in Settings first.')),
+    );
     return;
   }
 
-  Navigator.of(context).push(MaterialPageRoute(
-    builder: (_) => PrintReceiptPreviewView(
-      businessName: inv.senderName.isEmpty ? 'Business' : inv.senderName,
-      businessSub: inv.senderAddress,
-      invoiceNo: inv.invoiceNumber,
-      date: inv.issuedDate,
-      billTo: inv.clientName,
-      items: inv.items
-          .map((i) => PosReceiptLine(name: i.name, qty: i.qty, rate: i.rate))
-          .toList(),
-      subtotal: inv.subtotal,
-      gstAmt: inv.gstAmt,
-      total: inv.grandTotal,
-      gstPercent: inv.gstPercent,
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => PrintReceiptPreviewView(
+        businessName: inv.senderName.isEmpty ? 'Business' : inv.senderName,
+        businessSub: inv.senderAddress,
+        invoiceNo: inv.invoiceNumber,
+        date: inv.issuedDate,
+        billTo: inv.clientName,
+        items: inv.items
+            // Discounted taxable value, so lines add up to the subtotal.
+            .map(
+              (i) => PosReceiptLine(
+                name: i.name,
+                qty: i.qty,
+                rate: i.rate,
+                amount: i.total,
+              ),
+            )
+            .toList(),
+        subtotal: inv.subtotal,
+        gstAmt: inv.gstAmt,
+        total: inv.roundedTotal,
+        gstPercent: inv.gstPercent,
+      ),
     ),
-  ));
+  );
 }
 
 class InvoicePreviewView extends StatefulWidget {
@@ -98,28 +336,37 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
             backgroundColor: AppColors.surface(context),
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_rounded,
-                  color: AppColors.textPrimary(context)),
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: AppColors.textPrimary(context),
+              ),
               onPressed: _goBack,
             ),
-            title: Text('Preview',
-                style: TextStyle(
-                    color: AppColors.textPrimary(context),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600)),
+            title: Text(
+              'Preview',
+              style: TextStyle(
+                color: AppColors.textPrimary(context),
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             actions: hasInvoice
                 ? [
-              IconButton(
-                icon: Icon(Icons.print_outlined,
-                    color: AppColors.textPrimary(context)),
-                onPressed: () => _printPdf(context, vm),
-              ),
-              IconButton(
-                icon: Icon(Icons.more_vert_rounded,
-                    color: AppColors.textPrimary(context)),
-                onPressed: () => _showMoreSheet(context, vm),
-              ),
-            ]
+                    IconButton(
+                      icon: Icon(
+                        Icons.print_outlined,
+                        color: AppColors.textPrimary(context),
+                      ),
+                      onPressed: () => _printPdf(context, vm),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.more_vert_rounded,
+                        color: AppColors.textPrimary(context),
+                      ),
+                      onPressed: () => _showMoreSheet(context, vm),
+                    ),
+                  ]
                 : null,
           ),
           body: _buildBody(context, vm),
@@ -131,7 +378,8 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
   Widget _buildBody(BuildContext context, InvoicePreviewViewModel vm) {
     if (vm.isLoading) {
       return const Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
     }
     if (vm.notFound) {
       return EmptyState(
@@ -151,15 +399,12 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
         onAction: () => vm.load(widget.invoiceId),
       );
     }
-    return Column(children: [
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: _InvoiceCard(vm: vm),
-        ),
-      ),
-      _BottomBar(vm: vm),
-    ]);
+    return Column(
+      children: [
+        Expanded(child: _InvoicePdfView(vm: vm)),
+        _BottomBar(vm: vm),
+      ],
+    );
   }
 
   void _showMoreSheet(BuildContext context, InvoicePreviewViewModel vm) {
@@ -167,69 +412,80 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
       context: context,
       backgroundColor: AppColors.surface(context),
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
                   color: AppColors.border(context),
-                  borderRadius: BorderRadius.circular(2)),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _SheetTile(
-            icon: Icons.edit_outlined,
-            label: 'Edit invoice',
-            onTap: () {
-              Navigator.pop(context);
-              context.push('/invoices/create', extra: vm.invoice?.id);
-            },
-          ),
-          _SheetTile(
-            icon: Icons.style_outlined,
-            label: 'Change template',
-            onTap: () {
-              Navigator.pop(context);
-              context.push('/settings/pdf-template');
-            },
-          ),
-          _SheetTile(
-            icon: Icons.point_of_sale_outlined,
-            label: 'Print receipt (POS)',
-            onTap: () {
-              Navigator.pop(context);
-              _printReceiptPos(context, vm);
-            },
-          ),
-          _SheetTile(
-            icon: Icons.content_copy_outlined,
-            label: 'Duplicate',
-            onTap: () async {
-              Navigator.pop(context);
-              final newId = await vm.duplicateInvoice();
-              if (!context.mounted) return;
-              if (newId != null) {
-                context.push('/invoices/$newId/preview');
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(vm.errorMsg ?? 'Could not duplicate invoice.')));
-              }
-            },
-          ),
-          _SheetTile(
-            icon: Icons.delete_outline_rounded,
-            label: 'Delete',
-            color: AppColors.error,
-            onTap: () {
-              Navigator.pop(context);
-              _confirmDelete(context, vm);
-            },
-          ),
-        ]),
+            const SizedBox(height: 16),
+            _SheetTile(
+              icon: Icons.edit_outlined,
+              label: 'Edit invoice',
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/invoices/create', extra: vm.invoice?.id);
+              },
+            ),
+            _SheetTile(
+              icon: Icons.style_outlined,
+              label: 'Change template',
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/settings/pdf-template');
+              },
+            ),
+            if (AppFeatures.posPrinter)
+              _SheetTile(
+                icon: Icons.point_of_sale_outlined,
+                label: 'Print receipt (POS)',
+                onTap: () {
+                  Navigator.pop(context);
+                  _printReceiptPos(context, vm);
+                },
+              ),
+            _SheetTile(
+              icon: Icons.content_copy_outlined,
+              label: 'Duplicate',
+              onTap: () async {
+                Navigator.pop(context);
+                final newId = await vm.duplicateInvoice();
+                if (!context.mounted) return;
+                if (newId != null) {
+                  context.push('/invoices/$newId/preview');
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        vm.errorMsg ?? 'Could not duplicate invoice.',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+            _SheetTile(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete',
+              color: AppColors.error,
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDelete(context, vm);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -240,17 +496,24 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete invoice?',
-            style: TextStyle(
-                color: AppColors.textPrimary(context),
-                fontWeight: FontWeight.w700)),
-        content: Text('This action cannot be undone.',
-            style: TextStyle(color: AppColors.textSecondary(context))),
+        title: Text(
+          'Delete invoice?',
+          style: TextStyle(
+            color: AppColors.textPrimary(context),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          'This action cannot be undone.',
+          style: TextStyle(color: AppColors.textSecondary(context)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary(context))),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
           ),
           TextButton(
             onPressed: () async {
@@ -260,13 +523,20 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
               if (ok) {
                 _goBack();
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(vm.errorMsg ?? 'Could not delete invoice.')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(vm.errorMsg ?? 'Could not delete invoice.'),
+                  ),
+                );
               }
             },
-            child: const Text('Delete',
-                style: TextStyle(
-                    color: AppColors.error, fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -274,299 +544,83 @@ class _InvoicePreviewViewState extends State<InvoicePreviewView> {
   }
 }
 
-// ─── Invoice Card ─────────────────────────────────────────────────────────────
+/// ─── Invoice PDF ──────────────────────────────────────────────────────────────
+// Shows the real generated PDF (not a hand-drawn imitation), so what the user
+// sees here is exactly what gets printed or shared, in the active template.
 
-class _InvoiceCard extends StatelessWidget {
-  const _InvoiceCard({required this.vm});
+class _InvoicePdfView extends StatelessWidget {
+  const _InvoicePdfView({required this.vm});
   final InvoicePreviewViewModel vm;
 
   @override
   Widget build(BuildContext context) {
     final inv = vm.invoice!;
+    final t = vm.activeTemplate;
 
-    // ── Active template — every color below comes from here ──────────────
-    final t           = PdfTemplateService.selected;
-    final headerBg    = t.headerColor;
-    final accent      = t.accentColor;
-    final isDark      = t.darkHeader;
-    final onHeader    = isDark ? Colors.white         : const Color(0xFF1A1A2E);
-    final subOnHeader = isDark ? Colors.white70       : const Color(0xFF888888);
-    // Card body is always white (PDF paper feel); only header band changes
-    const bodyText    = Color(0xFF1A1A2E);
-    const mutedText   = Color(0xFF888888);
-    const dividerClr  = Color(0xFFEEEEEE);
-    const rowBg       = Color(0xFFF8F8FC);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 24,
-              offset: const Offset(0, 8)),
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-        // ── Header band — uses template headerColor ────────────────────
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: headerBg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Logo / icon — uses template accentColor
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.bolt_rounded,
-                    color: isDark ? Colors.white : Colors.white, size: 24),
-              ),
+              _StatusBadge(status: inv.status),
               const Spacer(),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('INVOICE',
-                    style: TextStyle(
-                        color: onHeader,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5)),
-                const SizedBox(height: 4),
-                Text(inv.invoiceNumber,
-                    style: TextStyle(color: subOnHeader, fontSize: 12)),
-                const SizedBox(height: 6),
-                _StatusBadge(status: inv.status),
-              ]),
-            ],
-          ),
-        ),
-
-        // ── Sender info ───────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child:
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(inv.senderName,
-                style: const TextStyle(
-                    color: bodyText,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            // Sender address uses accent color
-            Text(inv.senderAddress,
-                style: TextStyle(color: accent, fontSize: 12)),
-            Text('GSTIN — ${inv.senderGst ?? 'unregistered'}',
-                style: const TextStyle(color: mutedText, fontSize: 12)),
-          ]),
-        ),
-
-        // Divider
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Divider(color: dividerClr, height: 1),
-        ),
-
-        // ── Bill to + Issued ──────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('BILL TO',
-                          style: TextStyle(
-                              color: mutedText,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.8)),
-                      const SizedBox(height: 4),
-                      Text(inv.clientName,
-                          style: const TextStyle(
-                              color: bodyText,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
-                      Text(inv.clientEmail,
-                          style: const TextStyle(
-                              color: mutedText, fontSize: 12)),
-                    ]),
+              ActionChip(
+                avatar: const Icon(
+                  Icons.dashboard_customize_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+                label: const Text(
+                  'Arrange',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                backgroundColor: AppColors.primary.withValues(alpha: 0.08),
+                side: BorderSide.none,
+                onPressed: () =>
+                    openSectionArranger(context, invoice: inv, template: t),
               ),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                const Text('ISSUED',
-                    style: TextStyle(
-                        color: mutedText,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.8)),
-                const SizedBox(height: 4),
-                Text(inv.issuedDate,
-                    style: const TextStyle(
-                        color: bodyText,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-              ]),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 20),
-
-        // ── Line items table header — uses template accent tint ────────
-        Container(
-          color: headerBg.withValues(alpha: 0.4),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Row(children: [
-            const Expanded(
-              child: Text('DESCRIPTION',
-                  style: TextStyle(
-                      color: mutedText,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8)),
-            ),
-            const Text('QTY',
-                style: TextStyle(
-                    color: mutedText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8)),
-            const SizedBox(width: 32),
-            const Text('AMOUNT',
-                style: TextStyle(
-                    color: mutedText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8)),
-          ]),
-        ),
-
-        // ── Line items — item name uses accent color ───────────────────
-        ...inv.items.map((item) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          child: Row(children: [
-            Expanded(
-              child: Text(item.name,
-                  style: TextStyle(
-                      color: accent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500)),
-            ),
-            Text('${item.qty.toStringAsFixed(0)}',
-                style: const TextStyle(color: bodyText, fontSize: 13)),
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 70,
-              child: Text('₹${_fmt(item.total)}',
-                  textAlign: TextAlign.right,
+              const SizedBox(width: 6),
+              ActionChip(
+                avatar: Icon(
+                  Icons.style_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+                label: Text(
+                  t.name,
                   style: const TextStyle(
-                      color: bodyText,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ]),
-        )),
-
-        const SizedBox(height: 16),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Divider(color: dividerClr, height: 1),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Subtotals — grand total uses accent color ──────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(children: [
-            _SummaryRow(
-              label: 'Subtotal',
-              value: '₹${_fmt(inv.subtotal)}',
-              labelColor: mutedText,
-              valueColor: mutedText,
-            ),
-            const SizedBox(height: 4),
-            _SummaryRow(
-              label: 'GST ${inv.gstPercent.toStringAsFixed(0)}%',
-              value: '₹${_fmt(inv.gstAmt)}',
-              labelColor: mutedText,
-              valueColor: mutedText,
-            ),
-            if (inv.discountAmt > 0) ...[
-              const SizedBox(height: 4),
-              _SummaryRow(
-                label: 'Discount',
-                value: '−₹${_fmt(inv.discountAmt)}',
-                labelColor: mutedText,
-                valueColor: AppColors.success,
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                backgroundColor: AppColors.primary.withValues(alpha: 0.08),
+                side: BorderSide.none,
+                onPressed: () => context.push('/settings/pdf-template'),
               ),
             ],
-            const SizedBox(height: 10),
-            const Divider(color: dividerClr, height: 1),
-            const SizedBox(height: 10),
-            _SummaryRow(
-              label: 'Total',
-              value: '₹${_fmtFull(inv.grandTotal)}',
-              labelColor: bodyText,
-              valueColor: accent,   // ← accent drives the grand total color
-              bold: true,
-              largeValue: true,
-            ),
-          ]),
-        ),
-
-        const SizedBox(height: 16),
-
-        // ── Footer note ────────────────────────────────────────────────
-        if (inv.note != null && inv.note!.isNotEmpty)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: headerBg.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(inv.note!,
-                style: const TextStyle(
-                    color: mutedText,
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic)),
           ),
-
-        const SizedBox(height: 20),
-      ]),
+        ),
+        Expanded(
+          child: CachedPdfPreview(
+            // Regenerate only when the template, status or layout changes.
+            cacheKey:
+                '${t.id}-${inv.status}-'
+                '${PdfTemplateService.sections.toJson()}',
+            build: () => PdfService.buildInvoicePdfBytes(
+              inv,
+              t,
+              sections: PdfTemplateService.sections,
+            ),
+          ),
+        ),
+      ],
     );
-  }
-
-  String _fmt(double v) {
-    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return v.toStringAsFixed(0);
-  }
-
-  String _fmtFull(double v) {
-    final s = v.toStringAsFixed(0);
-    if (s.length <= 3) return s;
-    final last3 = s.substring(s.length - 3);
-    final rest = s.substring(0, s.length - 3);
-    final groups = <String>[];
-    var r = rest;
-    while (r.length > 2) {
-      groups.insert(0, r.substring(r.length - 2));
-      r = r.substring(0, r.length - 2);
-    }
-    if (r.isNotEmpty) groups.insert(0, r);
-    return '${groups.join(',')},${last3}';
   }
 }
 
@@ -581,53 +635,21 @@ class _StatusBadge extends StatelessWidget {
     final (bg, fg) = InvoiceStatus.badgeColors(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration:
-      BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(status.toUpperCase(),
-          style: TextStyle(
-              color: fg,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: fg,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
-}
-
-// ─── Summary Row ──────────────────────────────────────────────────────────────
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    required this.labelColor,
-    required this.valueColor,
-    this.bold = false,
-    this.largeValue = false,
-  });
-  final String label;
-  final String value;
-  final Color labelColor;
-  final Color valueColor;
-  final bool bold;
-  final bool largeValue;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(label,
-          style: TextStyle(
-              color: labelColor,
-              fontSize: bold ? 15 : 13,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
-      Text(value,
-          style: TextStyle(
-              color: valueColor,
-              fontSize: largeValue ? 20 : 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: largeValue ? -0.5 : 0)),
-    ],
-  );
 }
 
 // ─── Bottom Bar ───────────────────────────────────────────────────────────────
@@ -640,51 +662,67 @@ class _BottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-          20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
+        20,
+        12,
+        20,
+        MediaQuery.of(context).padding.bottom + 12,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surface(context),
         border: Border(top: BorderSide(color: AppColors.border(context))),
       ),
-      child: Row(children: [
-        _ActionBtn(
-          icon: Icons.download_outlined,
-          label: 'PDF',
-          onTap: () => _printPdf(context, vm),
-        ),
-        const SizedBox(width: 10),
-        _ActionBtn(
-          icon: vm.invoice?.status.toLowerCase() == 'paid'
-              ? Icons.remove_circle_outline_rounded
-              : Icons.check_circle_outline_rounded,
-          label: vm.invoice?.status.toLowerCase() == 'paid' ? 'Unpaid' : 'Paid',
-          iconColor: vm.invoice?.status.toLowerCase() == 'paid'
-              ? AppColors.error
-              : AppColors.success,
-          labelColor: vm.invoice?.status.toLowerCase() == 'paid'
-              ? AppColors.error
-              : AppColors.success,
-          onTap: () => vm.togglePaidStatus(),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 2,
-          child: ElevatedButton.icon(
-            onPressed: () => _sharePdf(context, vm),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              minimumSize: const Size(0, 52),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            icon: const Icon(Icons.share_rounded, color: Colors.white, size: 18),
-            label: const Text('Share',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15)),
+      child: Row(
+        children: [
+          _ActionBtn(
+            icon: Icons.download_outlined,
+            label: 'PDF',
+            onTap: () => _printPdf(context, vm),
           ),
-        ),
-      ]),
+          const SizedBox(width: 10),
+          _ActionBtn(
+            icon: vm.invoice?.status.toLowerCase() == 'paid'
+                ? Icons.remove_circle_outline_rounded
+                : Icons.check_circle_outline_rounded,
+            label: vm.invoice?.status.toLowerCase() == 'paid'
+                ? 'Unpaid'
+                : 'Paid',
+            iconColor: vm.invoice?.status.toLowerCase() == 'paid'
+                ? AppColors.error
+                : AppColors.success,
+            labelColor: vm.invoice?.status.toLowerCase() == 'paid'
+                ? AppColors.error
+                : AppColors.success,
+            onTap: () => vm.togglePaidStatus(),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: ElevatedButton.icon(
+              onPressed: () => _sharePdf(context, vm),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(0, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(
+                Icons.share_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+              label: const Text(
+                'Share',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -716,14 +754,20 @@ class _ActionBtn extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon,
-              color: iconColor ?? AppColors.textSecondary(context), size: 20),
+          Icon(
+            icon,
+            color: iconColor ?? AppColors.textSecondary(context),
+            size: 20,
+          ),
           const SizedBox(height: 3),
-          Text(label,
-              style: TextStyle(
-                  color: labelColor ?? AppColors.textSecondary(context),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              color: labelColor ?? AppColors.textSecondary(context),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     ),
@@ -747,12 +791,18 @@ class _SheetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     contentPadding: EdgeInsets.zero,
-    leading: Icon(icon,
-        color: color ?? AppColors.textPrimary(context), size: 22),
-    title: Text(label,
-        style: TextStyle(
-            color: color ?? AppColors.textPrimary(context),
-            fontWeight: FontWeight.w500)),
+    leading: Icon(
+      icon,
+      color: color ?? AppColors.textPrimary(context),
+      size: 22,
+    ),
+    title: Text(
+      label,
+      style: TextStyle(
+        color: color ?? AppColors.textPrimary(context),
+        fontWeight: FontWeight.w500,
+      ),
+    ),
     onTap: onTap,
   );
 }

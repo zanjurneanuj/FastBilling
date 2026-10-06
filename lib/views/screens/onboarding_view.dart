@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../utils/app_colors.dart';
+import '../../services/IntroService.dart';
 import '../../services/ProfileService.dart';
 import '../../services/auth_service.dart';
 
@@ -55,6 +56,9 @@ class _OnboardingViewState extends State<OnboardingView> {
   Future<void> _continue() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    // A brand-new business goes through the welcome screen (referral code,
+    // free templates) before Home.
+    IntroService.welcomePending = true;
     try {
       await ProfileService.save(
         name: _name.text.trim(),
@@ -63,8 +67,9 @@ class _OnboardingViewState extends State<OnboardingView> {
         currency: _currency,
         logoFile: _logo,
       );
-      if (mounted) context.go('/home');
+      if (mounted) context.go('/welcome');
     } catch (e) {
+      IntroService.welcomePending = false;
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Could not save: $e')));

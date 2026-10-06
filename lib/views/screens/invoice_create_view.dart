@@ -1,12 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/InvoiceLineItem.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/plan_limits.dart';
 import '../../viewmodels/client_viewmodel.dart';
 import '../../viewmodels/invoice_viewmodel.dart';
+import '../widgets/client_tax_fields.dart';
+import 'item_edit_view.dart';
 
 class InvoiceCreateView extends StatelessWidget {
   const InvoiceCreateView({super.key, this.editInvoiceId});
@@ -103,33 +110,61 @@ class _InvoiceCreateBody extends StatelessWidget {
                       // ── Line items ─────────────────────────────────────
                       _SectionLabel('LINE ITEMS'),
                       const SizedBox(height: 10),
-                      ...vm.items.map(
-                        (item) => _LineItemRow(
+                      for (final (n, item) in vm.items.indexed)
+                        _LineItemCard(
                           key: ValueKey(item.id),
-                          item: item,
-                          onChanged: ({name, qty, rate, hsnCode, unit}) =>
-                              vm.updateItem(
-                            item.id,
-                            name: name,
-                            qty: qty,
-                            rate: rate,
-                            hsnCode: hsnCode,
-                            unit: unit,
-                          ),
+                          index: n + 1,
+                          item: item.data,
+                          defaultGst: vm.gstPercent,
+                          onTap: () async {
+                            final r = await openItemEditor(context,
+                                initial: item.data, defaultGst: vm.gstPercent);
+                            if (r == null) return;
+                            if (r.deleted) {
+                              vm.removeItem(item.id);
+                            } else {
+                              vm.replaceItem(item.id, r.item!);
+                            }
+                          },
                           onDelete: () => vm.removeItem(item.id),
                         ),
-                      ),
 
                       // ── Add item button ────────────────────────────────
-                      _AddItemButton(onTap: vm.addItem),
+                      _AddItemButton(onTap: () async {
+                        final r = await openItemEditor(context,
+                            defaultGst: vm.gstPercent);
+                        if (r?.item != null) vm.addItem(r!.item!);
+                      }),
                       const SizedBox(height: 14),
 
-                      // ── Tax & discount ─────────────────────────────────
+                      // ── Tax & charges ──────────────────────────────────
                       _TaxDiscountPanel(vm: vm),
+                      const SizedBox(height: 12),
+
+                      // ── PO / reference ─────────────────────────────────
+                      _MoreDetailsPanel(vm: vm),
                       const SizedBox(height: 20),
 
                       // ── Totals ─────────────────────────────────────────
                       _TotalsSection(vm: vm),
+                      const SizedBox(height: 22),
+
+                      // ── Payment: paid / unpaid, mode, stamp ────────────
+                      _SectionLabel('PAYMENT'),
+                      const SizedBox(height: 10),
+                      _PaymentCard(vm: vm),
+                      const SizedBox(height: 22),
+
+                      // ── Terms & notes ──────────────────────────────────
+                      _SectionLabel('TERMS & NOTES'),
+                      const SizedBox(height: 10),
+                      _TermsNotesCard(vm: vm),
+                      const SizedBox(height: 22),
+
+                      // ── Attachments ────────────────────────────────────
+                      _SectionLabel('ATTACHMENTS'),
+                      const SizedBox(height: 10),
+                      _AttachmentsCard(vm: vm),
 
                       // Error banner
                       if (vm.errorMsg != null) ...[
@@ -159,38 +194,53 @@ class _MetaRow extends StatelessWidget {
 
   final InvoiceCreateViewModel vm;
 
+  Future<DateTime?> _pick(
+      BuildContext context, DateTime initial, DateTime first) {
+    return showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(first) ? first : initial,
+      firstDate: first,
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      // Colours come from the app theme's datePickerTheme, which has
+      // light and dark variants (a forced light scheme here made the dates
+      // white-on-white in dark mode).
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final fmt = DateFormat('d MMM yy');
     return Row(
       children: [
         Expanded(
+          flex: 5,
           child: _MetaTile(
             label: 'Invoice no.',
             value: vm.invoiceNumber,
             onTap: null, // read-only
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
+          flex: 4,
+          child: _MetaTile(
+            label: 'Date',
+            value: fmt.format(vm.invoiceDate),
+            onTap: () async {
+              final picked = await _pick(context, vm.invoiceDate,
+                  DateTime.now().subtract(const Duration(days: 365)));
+              if (picked != null) vm.setInvoiceDate(picked);
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 4,
           child: _MetaTile(
             label: 'Due date',
-            value: DateFormat('d MMM yyyy').format(vm.dueDate),
+            value: fmt.format(vm.dueDate),
             onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: vm.dueDate,
-                firstDate: DateTime.now(),
-                lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-                builder: (ctx, child) => Theme(
-                  data: Theme.of(ctx).copyWith(
-                    colorScheme: ColorScheme.light(
-                      primary: AppColors.primary,
-                      onSurface: AppColors.textPrimary(ctx),
-                    ),
-                  ),
-                  child: child!,
-                ),
-              );
+              final picked = await _pick(context, vm.dueDate, vm.invoiceDate);
               if (picked != null) vm.setDueDate(picked);
             },
           ),
@@ -237,12 +287,17 @@ class _MetaTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: AppColors.textPrimary(context),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                color: AppColors.textPrimary(context),
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -305,6 +360,19 @@ class _ClientPicker extends StatelessWidget {
                         style: TextStyle(
                           color: AppColors.textSecondary(context),
                           fontSize: 12,
+                        ),
+                      ),
+                    if (vm.clientGstin.isNotEmpty || vm.clientState.isNotEmpty)
+                      Text(
+                        [
+                          if (vm.clientGstin.isNotEmpty) 'GSTIN ${vm.clientGstin}',
+                          if (vm.clientState.isNotEmpty) vm.clientState,
+                          vm.isInterState ? 'IGST' : 'CGST + SGST',
+                        ].join(' · '),
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                   ],
@@ -411,12 +479,19 @@ class _ClientPicker extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    onTap: () => _showAddClientSheet(
-                      context,
-                      vm,
-                      clientsVm,
-                      onAdded: () => setSheetState(() {}),
-                    ),
+                    onTap: () async {
+                      if (!await ensureCanAddClient(
+                              context, clientsVm.clients.length) ||
+                          !context.mounted) {
+                        return;
+                      }
+                      _showAddClientSheet(
+                        context,
+                        vm,
+                        clientsVm,
+                        onAdded: () => setSheetState(() {}),
+                      );
+                    },
                   ),
                   Divider(color: AppColors.border(context), height: 1),
                   const SizedBox(height: 4),
@@ -457,11 +532,7 @@ class _ClientPicker extends StatelessWidget {
                                   ),
                                 ),
                                 onTap: () {
-                                  vm.setClient(
-                                    id: c.id,
-                                    name: c.name,
-                                    email: c.email,
-                                  );
+                                  vm.setClient(c);
                                   Navigator.pop(sheetContext);
                                 },
                               );
@@ -490,6 +561,9 @@ class _ClientPicker extends StatelessWidget {
     final emailCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final cityCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final gstinCtrl = TextEditingController();
+    String? state;
     final formKey = GlobalKey<FormState>();
     bool saving = false;
 
@@ -506,6 +580,7 @@ class _ClientPicker extends StatelessWidget {
               24, 16, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 32),
           child: Form(
             key: formKey,
+            child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,6 +633,13 @@ class _ClientPicker extends StatelessWidget {
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'City · optional'),
                 ),
+                const SizedBox(height: 14),
+                ClientTaxFields(
+                  addressCtrl: addressCtrl,
+                  gstinCtrl: gstinCtrl,
+                  state: state,
+                  onStateChanged: (v) => setModalState(() => state = v),
+                ),
                 const SizedBox(height: 22),
                 SizedBox(
                   width: double.infinity,
@@ -575,6 +657,9 @@ class _ClientPicker extends StatelessWidget {
                         email: email,
                         phone: phoneCtrl.text.trim(),
                         city: cityCtrl.text.trim(),
+                        address: addressCtrl.text.trim(),
+                        gstin: gstinCtrl.text.trim().toUpperCase(),
+                        state: state ?? '',
                       );
 
                       if (clientsVm.errorMsg != null) {
@@ -588,11 +673,7 @@ class _ClientPicker extends StatelessWidget {
 
                       final newClient = clientsVm.clients
                           .firstWhere((c) => c.name == name && c.email == email);
-                      vm.setClient(
-                        id: newClient.id,
-                        name: newClient.name,
-                        email: newClient.email,
-                      );
+                      vm.setClient(newClient);
                       onAdded();
                       if (sheetContext.mounted) {
                         Navigator.pop(sheetContext); // close add-client sheet
@@ -611,6 +692,7 @@ class _ClientPicker extends StatelessWidget {
                 ),
               ],
             ),
+            ),
           ),
         ),
       ),
@@ -618,385 +700,182 @@ class _ClientPicker extends StatelessWidget {
   }
 }
 
-// ─── Line Item Row ────────────────────────────────────────────────────────────
+/// ─── Line Item Card ───────────────────────────────────────────────────────────
+// Read-only summary of one line; tapping opens the full item screen.
 
-class _LineItemRow extends StatefulWidget {
-  const _LineItemRow({
+class _LineItemCard extends StatelessWidget {
+  const _LineItemCard({
     super.key,
+    required this.index,
     required this.item,
-    required this.onChanged,
+    required this.defaultGst,
+    required this.onTap,
     required this.onDelete,
   });
 
-  final LineItem item;
-  final void Function({
-    String? name,
-    double? qty,
-    double? rate,
-    String? hsnCode,
-    String? unit,
-  }) onChanged;
+  final int index;
+  final InvoiceLineItem item;
+  final double defaultGst;
+  final VoidCallback onTap;
   final VoidCallback onDelete;
 
-  @override
-  State<_LineItemRow> createState() => _LineItemRowState();
-}
-
-class _LineItemRowState extends State<_LineItemRow> {
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _qtyCtrl;
-  late final TextEditingController _rateCtrl;
-  late final TextEditingController _hsnCtrl;
-  late final TextEditingController _unitCtrl;
-  bool _nameFocused = false;
-  bool _detailsExpanded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameCtrl = TextEditingController(
-      text: widget.item.name.isEmpty ? '' : widget.item.name,
-    );
-    _qtyCtrl = TextEditingController(
-      text: widget.item.qty == 1 ? '1' : widget.item.qty.toStringAsFixed(0),
-    );
-    _rateCtrl = TextEditingController(
-      text: widget.item.rate == 0 ? '' : _trimTrailingZero(widget.item.rate),
-    );
-    _hsnCtrl = TextEditingController(text: widget.item.hsnCode);
-    _unitCtrl = TextEditingController(text: widget.item.unit);
-    _detailsExpanded = widget.item.hsnCode.isNotEmpty;
-  }
-
-  static String _trimTrailingZero(double v) {
-    if (v == v.roundToDouble()) return v.toStringAsFixed(0);
-    var s = v.toStringAsFixed(2);
-    if (s.endsWith('0')) s = s.substring(0, s.length - 1);
-    return s;
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _qtyCtrl.dispose();
-    _rateCtrl.dispose();
-    _hsnCtrl.dispose();
-    _unitCtrl.dispose();
-    super.dispose();
-  }
-
-  // ── Shared input decoration (no underline, no outline) ──────────────────
-  InputDecoration _collapsed(String hint, BuildContext context) =>
-      InputDecoration.collapsed(
-        hintText: hint,
-        hintStyle: TextStyle(
-          color: AppColors.textHint(context),
-          fontWeight: FontWeight.w400,
-          fontSize: 13,
-        ),
-      );
+  static final _grouped = NumberFormat('#,##,##0.##', 'en_IN');
+  static String _n(double v) => _grouped.format(v);
 
   @override
   Widget build(BuildContext context) {
-    final total = widget.item.total;
-    final hasValue = total > 0;
+    final rate = item.taxRate(defaultGst);
+    final chips = <String>[
+      if (item.hsnCode.isNotEmpty) 'HSN ${item.hsnCode}',
+      'GST ${_n(rate)}%${item.taxInclusive ? ' incl.' : ''}',
+      if (item.discountAmount > 0)
+        item.discountType == DiscountType.percent
+            ? '${_n(item.discountValue)}% off'
+            : '₹${_n(item.discountValue)} off',
+      if (item.batchNo.isNotEmpty) 'Batch ${item.batchNo}',
+      if (item.expiry.isNotEmpty) 'Exp ${item.expiry}',
+    ];
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
         color: AppColors.surface(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _nameFocused
-              ? AppColors.primary.withValues(alpha: 0.5)
-              : AppColors.border(context),
-          width: _nameFocused ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Top section: icon + name + total + delete ───────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 18, 12, 16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 12, 6, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border(context)),
+            ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Icon badge
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    Icons.receipt_long_outlined,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Name field — Expanded directly in Row (no wrapper)
-                Expanded(
-                  child: Focus(
-                    onFocusChange: (focused) =>
-                        setState(() => _nameFocused = focused),
-                    child: TextField(
-                      controller: _nameCtrl,
-                      onChanged: (v) => widget.onChanged(name: v),
-                      style: TextStyle(
-                        color: AppColors.textPrimary(context),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.1,
-                      ),
-                      decoration: _collapsed('Item name', context),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Total
-                Text(
-                  '₹${_fmtNum(total)}',
-                  style: TextStyle(
-                    color: hasValue
-                        ? AppColors.textPrimary(context)
-                        : AppColors.textHint(context),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Delete button
-                GestureDetector(
-                  onTap: widget.onDelete,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      color: AppColors.background(context),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 14,
-                      color: AppColors.textSecondary(context),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Divider ─────────────────────────────────────────────────
-          Divider(height: 1, color: AppColors.border(context)),
-
-          // ── Bottom section: qty × rate = total ──────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 9, 12, 12),
-            child: Row(
-              children: [
-                // Qty pill
-                _InputPill(
-                  width: 80,
-                  prefix: 'Qty',
-                  child: TextField(
-                    controller: _qtyCtrl,
-                    onChanged: (v) =>
-                        widget.onChanged(qty: double.tryParse(v) ?? 1),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    decoration: _collapsed('1', context),
-                  ),
-                ),
-
-                // × separator
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    '×',
-                    style: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ),
-
-                // Rate pill — takes remaining space
-                Expanded(
-                  child: _InputPill(
-                    prefix: '₹',
-                    child: TextField(
-                      controller: _rateCtrl,
-                      onChanged: (v) =>
-                          widget.onChanged(rate: double.tryParse(v) ?? 0),
-                      keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                      ],
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      decoration: _collapsed('rate', context),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // = total chip
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: hasValue
-                        ? AppColors.primary.withValues(alpha: 0.08)
-                        : AppColors.background(context),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    '₹${_fmtNum(total)}',
-                    style: TextStyle(
-                      color: hasValue
-                          ? AppColors.primary
-                          : AppColors.textHint(context),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Text('$index',
+                      style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(item.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: AppColors.textPrimary(context),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('₹${_n(item.lineTotal(defaultGst))}',
+                              style: TextStyle(
+                                  color: AppColors.textPrimary(context),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${_n(item.qty)} ${item.unit} × ₹${_n(item.rate)}',
+                        style: TextStyle(
+                            color: AppColors.textSecondary(context), fontSize: 12),
+                      ),
+                      if (item.description.isNotEmpty)
+                        Text(item.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.textHint(context), fontSize: 11)),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          for (final c in chips)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.background(context),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(c,
+                                  style: TextStyle(
+                                      color: AppColors.textSecondary(context),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Remove',
+                  icon: Icon(Icons.close_rounded,
+                      size: 18, color: AppColors.textSecondary(context)),
+                  onPressed: onDelete,
                 ),
               ],
             ),
           ),
-
-          // ── HSN/SAC + Unit (collapsible) ─────────────────────────────
-          GestureDetector(
-            onTap: () => setState(() => _detailsExpanded = !_detailsExpanded),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Text(
-                _detailsExpanded ? 'Hide HSN/SAC & unit' : 'Add HSN/SAC & unit',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          if (_detailsExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _InputPill(
-                      prefix: 'HSN/SAC',
-                      child: TextField(
-                        controller: _hsnCtrl,
-                        onChanged: (v) => widget.onChanged(hsnCode: v),
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(
-                          color: AppColors.textPrimary(context),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        decoration: _collapsed('code', context),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _InputPill(
-                      prefix: 'Unit',
-                      child: TextField(
-                        controller: _unitCtrl,
-                        onChanged: (v) => widget.onChanged(unit: v),
-                        style: TextStyle(
-                          color: AppColors.textPrimary(context),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        decoration: _collapsed('PCS', context),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
-
-  String _fmtNum(double v) {
-    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return v.toStringAsFixed(0);
-  }
 }
 
-// ── Reusable input pill widget ─────────────────────────────────────────────────
+// ── Selectable chip (GST rates, payment modes) ───────────────────────────────
 
-class _InputPill extends StatelessWidget {
-  const _InputPill({required this.child, required this.prefix, this.width});
+class _Chip extends StatelessWidget {
+  const _Chip({required this.label, required this.selected, required this.onTap});
 
-  final Widget child;
-  final String prefix;
-  final double? width;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final inner = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '$prefix ',
-          style: TextStyle(
-            color: AppColors.textHint(context),
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Expanded(child: child),
-      ],
-    );
-
-    return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.background(context),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: AppColors.border(context)),
+        color: selected ? AppColors.primary : AppColors.background(context),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: selected ? AppColors.primary : AppColors.border(context),
+        ),
       ),
-      child: width != null
-          ? inner // fixed width: Row with min mainAxisSize is fine
-          : inner, // expanded: parent Expanded handles sizing
-    );
-  }
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: selected ? Colors.white : AppColors.textSecondary(context),
+        ),
+      ),
+    ),
+  );
 }
+
 // ─── Add item button ──────────────────────────────────────────────────────────
 
 class _AddItemButton extends StatelessWidget {
@@ -1037,12 +916,24 @@ class _AddItemButton extends StatelessWidget {
   );
 }
 
-// ─── Tax & Discount Panel ─────────────────────────────────────────────────────
+/// ─── Collapsible card shared by the tax and "more details" panels ────────────
 
-class _TaxDiscountPanel extends StatelessWidget {
-  const _TaxDiscountPanel({required this.vm});
+class _ExpandableCard extends StatelessWidget {
+  const _ExpandableCard({
+    required this.icon,
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.child,
+    this.summary,
+  });
 
-  final InvoiceCreateViewModel vm;
+  final IconData icon;
+  final String title;
+  final String? summary;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -1061,31 +952,40 @@ class _TaxDiscountPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Header row
           InkWell(
-            onTap: vm.toggleTaxPanel,
+            onTap: onToggle,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.percent_rounded,
-                    color: AppColors.textSecondary(context),
-                    size: 18,
-                  ),
+                  Icon(icon, color: AppColors.textSecondary(context), size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    'Tax & discount',
+                    title,
                     style: TextStyle(
                       color: AppColors.textPrimary(context),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
+                  if (summary != null && !expanded)
+                    Expanded(
+                      child: Text(
+                        summary!,
+                        textAlign: TextAlign.right,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textSecondary(context),
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                  else
+                    const Spacer(),
                   AnimatedRotation(
-                    turns: vm.taxExpanded ? 0.5 : 0,
+                    turns: expanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
                     child: Icon(
                       Icons.keyboard_arrow_down_rounded,
@@ -1096,198 +996,536 @@ class _TaxDiscountPanel extends StatelessWidget {
               ),
             ),
           ),
-
-          // Expanded content
-          if (vm.taxExpanded) ...[
+          if (expanded) ...[
             Divider(height: 1, color: AppColors.border(context)),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              child: Column(
-                children: [
-                  // GST %
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'GST %',
-                          style: TextStyle(
-                            color: AppColors.textSecondary(context),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      ...[0.0, 5.0, 12.0, 18.0, 28.0].map(
-                        (pct) => GestureDetector(
-                          onTap: () => vm.setGst(pct),
-                          child: Container(
-                            margin: const EdgeInsets.only(left: 6),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: vm.gstPercent == pct
-                                  ? AppColors.primary
-                                  : AppColors.background(context),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: vm.gstPercent == pct
-                                    ? AppColors.primary
-                                    : AppColors.border(context),
-                              ),
-                            ),
-                            child: Text(
-                              pct == 0 ? 'None' : '${pct.toStringAsFixed(0)}%',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: vm.gstPercent == pct
-                                    ? Colors.white
-                                    : AppColors.textSecondary(context),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Discount
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Flat discount (₹)',
-                          style: TextStyle(
-                            color: AppColors.textSecondary(context),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 100,
-                        child: TextFormField(
-                          key: ValueKey('discount-${vm.taxExpanded}'),
-                          initialValue: vm.discountAmt == 0
-                              ? ''
-                              : _trimTrailingZero(vm.discountAmt),
-                          keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d*\.?\d{0,2}')),
-                          ],
-                          onChanged: (v) =>
-                              vm.setDiscount(double.tryParse(v) ?? 0),
-                          style: TextStyle(
-                            color: AppColors.textPrimary(context),
-                            fontSize: 14,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '0',
-                            hintStyle: TextStyle(
-                              color: AppColors.textHint(context),
-                            ),
-                            filled: true,
-                            fillColor: AppColors.background(context),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(
-                                color: AppColors.border(context),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(
-                                color: AppColors.border(context),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Payment mode
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Payment mode',
-                          style: TextStyle(
-                            color: AppColors.textSecondary(context),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: InvoiceCreateViewModel.paymentModes
-                        .map(
-                          (mode) => GestureDetector(
-                            onTap: () => vm.setPaymentMode(mode),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: vm.paymentMode == mode
-                                    ? AppColors.primary
-                                    : AppColors.background(context),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: vm.paymentMode == mode
-                                      ? AppColors.primary
-                                      : AppColors.border(context),
-                                ),
-                              ),
-                              child: Text(
-                                mode,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: vm.paymentMode == mode
-                                      ? Colors.white
-                                      : AppColors.textSecondary(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              ),
+              child: child,
             ),
           ],
         ],
       ),
     );
   }
+}
 
-  String _trimTrailingZero(double v) {
+/// Small right-aligned ₹ input used for discount / charges / amount paid.
+class _AmountField extends StatelessWidget {
+  const _AmountField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  static String _trim(double v) {
     if (v == v.roundToDouble()) return v.toStringAsFixed(0);
-    var s = v.toStringAsFixed(2);
-    if (s.endsWith('0')) s = s.substring(0, s.length - 1);
-    return s;
+    return v.toStringAsFixed(2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary(context),
+              fontSize: 13,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 110,
+          child: TextFormField(
+            initialValue: value == 0 ? '' : _trim(value),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+            ],
+            onChanged: (v) => onChanged(double.tryParse(v) ?? 0),
+            style: TextStyle(color: AppColors.textPrimary(context), fontSize: 14),
+            decoration: _boxedDecoration(context, hint: '0', prefix: '₹ '),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+InputDecoration _boxedDecoration(BuildContext context,
+    {String? hint, String? prefix, String? label}) {
+  OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: c, width: w),
+      );
+  return InputDecoration(
+    hintText: hint,
+    labelText: label,
+    prefixText: prefix,
+    hintStyle: TextStyle(color: AppColors.textHint(context)),
+    filled: true,
+    fillColor: AppColors.background(context),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    border: border(AppColors.border(context)),
+    enabledBorder: border(AppColors.border(context)),
+    focusedBorder: border(AppColors.primary, 1.5),
+  );
+}
+
+// ─── Tax & Charges Panel ──────────────────────────────────────────────────────
+
+class _TaxDiscountPanel extends StatelessWidget {
+  const _TaxDiscountPanel({required this.vm});
+
+  final InvoiceCreateViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = TextStyle(color: AppColors.textSecondary(context), fontSize: 13);
+    return _ExpandableCard(
+      icon: Icons.percent_rounded,
+      title: 'Tax & charges',
+      summary: [
+        'GST ${vm.gstPercent.toStringAsFixed(0)}%',
+        if (vm.discountAmt > 0) 'Disc ₹${vm.fmt(vm.discountAmt)}',
+        if (vm.otherCharges > 0) '+₹${vm.fmt(vm.otherCharges)}',
+      ].join(' · '),
+      expanded: vm.taxExpanded,
+      onToggle: vm.toggleTaxPanel,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Default GST % for new items', style: label),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final pct in const [0.0, 5.0, 12.0, 18.0, 28.0])
+                _Chip(
+                  label: pct == 0 ? 'None' : '${pct.toStringAsFixed(0)}%',
+                  selected: vm.gstPercent == pct,
+                  onTap: () => vm.setGst(pct),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _AmountField(
+            label: 'Bill discount (flat)',
+            value: vm.discountAmt,
+            onChanged: vm.setDiscount,
+          ),
+          const SizedBox(height: 10),
+          _AmountField(
+            label: 'Other charges (freight, packing)',
+            value: vm.otherCharges,
+            onChanged: vm.setOtherCharges,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── PO / reference number ────────────────────────────────────────────────────
+
+class _MoreDetailsPanel extends StatelessWidget {
+  const _MoreDetailsPanel({required this.vm});
+
+  final InvoiceCreateViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ExpandableCard(
+      icon: Icons.tag_rounded,
+      title: 'PO / reference no.',
+      summary: vm.poNumber.isEmpty ? 'Optional' : vm.poNumber,
+      expanded: vm.moreExpanded,
+      onToggle: vm.toggleMorePanel,
+      child: TextFormField(
+        initialValue: vm.poNumber,
+        onChanged: vm.setPoNumber,
+        style: TextStyle(color: AppColors.textPrimary(context), fontSize: 14),
+        decoration: _boxedDecoration(context, label: 'PO / reference no.'),
+      ),
+    );
+  }
+}
+
+// ─── Plain card wrapper for the always-open sections ─────────────────────────
+
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.surface(context),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border(context)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.03),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: child,
+  );
+}
+
+// ─── Payment: paid / unpaid, mode, amount received, stamp ────────────────────
+
+class _PaymentCard extends StatelessWidget {
+  const _PaymentCard({required this.vm});
+  final InvoiceCreateViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = TextStyle(color: AppColors.textSecondary(context), fontSize: 13);
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  label: Text('Unpaid'),
+                  icon: Icon(Icons.schedule_rounded, size: 16),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text('Paid'),
+                  icon: Icon(Icons.check_circle_rounded, size: 16),
+                ),
+              ],
+              selected: {vm.isPaid},
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith((s) =>
+                    s.contains(WidgetState.selected)
+                        ? (vm.isPaid ? AppColors.success : AppColors.warning)
+                            .withValues(alpha: 0.15)
+                        : null),
+                foregroundColor: WidgetStateProperty.resolveWith((s) =>
+                    s.contains(WidgetState.selected)
+                        ? (vm.isPaid ? AppColors.paidText : AppColors.pendingText)
+                        : AppColors.textSecondary(context)),
+              ),
+              onSelectionChanged: (s) => vm.setPaid(s.first),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(vm.isPaid ? 'Received via' : 'Payment mode', style: label),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final mode in InvoiceCreateViewModel.paymentModes)
+                _Chip(
+                  label: mode,
+                  selected: vm.paymentMode == mode,
+                  onTap: () => vm.setPaymentMode(mode),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (!vm.isPaid)
+            _AmountField(
+              label: 'Advance / part payment received',
+              value: vm.amountPaid,
+              onChanged: vm.setAmountPaid,
+            )
+          else
+            Row(
+              children: [
+                // Mini preview of the stamp printed on the PDF.
+                Transform.rotate(
+                  angle: -0.2,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: vm.showPaidStamp
+                              ? AppColors.paidText
+                              : AppColors.border(context),
+                          width: 2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('PAID',
+                        style: TextStyle(
+                            color: vm.showPaidStamp
+                                ? AppColors.paidText
+                                : AppColors.textHint(context),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2)),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('PAID stamp on PDF',
+                          style: TextStyle(
+                              color: AppColors.textPrimary(context),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600)),
+                      Text('Balance due becomes ₹0',
+                          style: TextStyle(
+                              color: AppColors.textSecondary(context),
+                              fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: vm.showPaidStamp,
+                  activeThumbColor: AppColors.success,
+                  onChanged: vm.setShowPaidStamp,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Terms & notes ────────────────────────────────────────────────────────────
+
+class _TermsNotesCard extends StatelessWidget {
+  const _TermsNotesCard({required this.vm});
+  final InvoiceCreateViewModel vm;
+
+  static const _presets = [
+    'Payment due within 15 days.',
+    'Goods once sold will not be taken back.',
+    'Subject to local jurisdiction.',
+    'Interest @18% p.a. on overdue payments.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = TextStyle(color: AppColors.textPrimary(context), fontSize: 14);
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            initialValue: vm.note,
+            onChanged: vm.setNote,
+            maxLines: 3,
+            minLines: 2,
+            style: textStyle,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: _boxedDecoration(context,
+                label: 'Notes for customer', hint: 'Thank you for your business!'),
+          ),
+          const SizedBox(height: 14),
+          TextFormField(
+            // Re-seed when a preset is appended below.
+            key: ValueKey('terms-${vm.terms.hashCode}'),
+            initialValue: vm.terms,
+            onChanged: vm.setTerms,
+            maxLines: 5,
+            minLines: 3,
+            style: textStyle,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: _boxedDecoration(context,
+                label: 'Terms & conditions',
+                hint: 'Goods once sold will not be taken back.'),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final p in _presets)
+                if (!vm.terms.contains(p))
+                  ActionChip(
+                    label: Text('+ $p', style: const TextStyle(fontSize: 11)),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => vm.appendTerms(p),
+                  ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('Terms are remembered for your next invoice.',
+              style: TextStyle(color: AppColors.textHint(context), fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+class _AttachmentsCard extends StatelessWidget {
+  const _AttachmentsCard({required this.vm});
+  final InvoiceCreateViewModel vm;
+
+  Future<void> _pick(BuildContext context, ImageSource source) async {
+    final picker = ImagePicker();
+    try {
+      final files = source == ImageSource.gallery
+          ? await picker.pickMultiImage(maxWidth: 1600, imageQuality: 80)
+          : [
+              if (await picker.pickImage(
+                      source: source, maxWidth: 1600, imageQuality: 80)
+                  case final f?)
+                f,
+            ];
+      for (final f in files) {
+        await vm.addAttachment(f.path, f.name);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not add attachment: $e')));
+      }
+    }
+  }
+
+  void _chooseSource(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface(context),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: AppColors.primary),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _pick(context, ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.photo_camera_outlined, color: AppColors.primary),
+              title: const Text('Take a photo'),
+              onTap: () {
+                Navigator.pop(sheet);
+                _pick(context, ImageSource.camera);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Photos of challans, receipts or delivered goods — added as pages at the end of the PDF.',
+            style: TextStyle(color: AppColors.textSecondary(context), fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final (i, a) in vm.attachments.indexed)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 76,
+                        height: 76,
+                        child: a.path != null && File(a.path!).existsSync()
+                            ? Image.file(File(a.path!), fit: BoxFit.cover)
+                            : a.url != null
+                                ? Image.network(a.url!, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.broken_image_outlined))
+                                : const Icon(Icons.image_not_supported_outlined),
+                      ),
+                    ),
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: GestureDetector(
+                        onTap: () => vm.removeAttachment(i),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                              color: AppColors.error, shape: BoxShape.circle),
+                          child: const Icon(Icons.close_rounded,
+                              size: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    if (a.url != null)
+                      const Positioned(
+                        left: 4,
+                        bottom: 4,
+                        child: Icon(Icons.cloud_done_rounded,
+                            size: 14, color: Colors.white),
+                      ),
+                  ],
+                ),
+              InkWell(
+                onTap: () => _chooseSource(context),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_photo_alternate_outlined,
+                          color: AppColors.primary),
+                      SizedBox(height: 2),
+                      Text('Add',
+                          style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1300,6 +1538,16 @@ class _TotalsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final d = vm.toDetail();
+    final muted =
+        TextStyle(color: AppColors.textSecondary(context), fontSize: 13);
+    String money(double v) => '₹${vm.fmtFull(v)}';
+    Widget row(String l, String v, {TextStyle? valueStyle}) => Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: _TotalRow(
+              label: l, value: v, labelStyle: muted, valueStyle: valueStyle ?? muted),
+        );
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface(context),
@@ -1317,65 +1565,27 @@ class _TotalsSection extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             child: Column(
               children: [
-                _TotalRow(
-                  label: 'Subtotal',
-                  value: '₹${vm.fmt(vm.subtotal)}',
-                  labelStyle: TextStyle(
-                    color: AppColors.textSecondary(context),
-                    fontSize: 13,
-                  ),
-                  valueStyle: TextStyle(
-                    color: AppColors.textSecondary(context),
-                    fontSize: 13,
-                  ),
-                ),
-                if (vm.gstPercent > 0) ...[
-                  const SizedBox(height: 6),
-                  _TotalRow(
-                    label: 'GST ${vm.gstPercent.toStringAsFixed(0)}%',
-                    value: '₹${vm.fmt(vm.gstAmt)}',
-                    labelStyle: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 13,
-                    ),
-                    valueStyle: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 13,
-                    ),
-                  ),
+                row('Taxable value', money(d.subtotal)),
+                if (d.gstAmt > 0) ...[
+                  if (d.isInterState)
+                    row('IGST', money(d.gstAmt))
+                  else ...[
+                    row('CGST', money(d.gstAmt / 2)),
+                    row('SGST', money(d.gstAmt / 2)),
+                  ],
                 ],
-                if (vm.discountAmt > 0) ...[
-                  const SizedBox(height: 6),
-                  _TotalRow(
-                    label: 'Discount',
-                    value: '−₹${vm.fmt(vm.discountAmt)}',
-                    labelStyle: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 13,
-                    ),
-                    valueStyle:
-                        TextStyle(color: AppColors.success, fontSize: 13),
-                  ),
-                ],
-                if (vm.roundOff != 0) ...[
-                  const SizedBox(height: 6),
-                  _TotalRow(
-                    label: 'Rounded off',
-                    value:
-                        '${vm.roundOff > 0 ? '+' : '−'}₹${vm.fmt(vm.roundOff.abs())}',
-                    labelStyle: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 13,
-                    ),
-                    valueStyle: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+                if (d.otherCharges > 0)
+                  row('Other charges', '+${money(d.otherCharges)}'),
+                if (d.discountAmt > 0)
+                  row('Discount', '−${money(d.discountAmt)}',
+                      valueStyle:
+                          const TextStyle(color: AppColors.success, fontSize: 13)),
+                if (d.roundOff.abs() >= 0.005)
+                  row('Rounded off',
+                      '${d.roundOff > 0 ? '+' : '−'}₹${d.roundOff.abs().toStringAsFixed(2)}'),
               ],
             ),
           ),
@@ -1383,26 +1593,64 @@ class _TotalsSection extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                const Text(
-                  'Grand total',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Grand total',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      money(d.roundedTotal),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '₹${vm.fmtFull(vm.roundedTotal)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+                if (d.isPaid) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Paid in full · ${vm.paymentMode}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      const Text('Balance due ₹0',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700)),
+                    ],
                   ),
-                ),
+                ] else if (d.amountPaid > 0) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Received ${money(d.amountPaid)}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      Text(
+                        'Balance due ${money(d.balanceDue)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

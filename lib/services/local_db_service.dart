@@ -19,7 +19,7 @@ class LocalDbService {
   static final LocalDbService instance = LocalDbService._();
 
   static const _dbName       = 'fast_billing.db';
-  static const _dbVersion    = 3;          // ← bumped 1 → 2 → 3
+  static const _dbVersion    = 4;          // ← bumped 1 → 2 → 3 → 4
   static const _userTable    = 'users';
   static const _profileTable = 'profiles';
   static const _settingsTable = 'settings'; // ← new
@@ -61,6 +61,11 @@ class LocalDbService {
         await db.execute('ALTER TABLE $_profileTable ADD COLUMN $col TEXT');
       }
     }
+    if (oldV < 4) {
+      for (final col in ['phone', 'email', 'pan', 'upi_id', 'signatory_name']) {
+        await db.execute('ALTER TABLE $_profileTable ADD COLUMN $col TEXT');
+      }
+    }
   }
 
   // ── Table helpers ─────────────────────────────────────────────────────────
@@ -72,6 +77,7 @@ class LocalDbService {
         name TEXT, address TEXT, gst_number TEXT, state TEXT, currency TEXT,
         logo_path TEXT, logo_url TEXT,
         bank_name TEXT, bank_account_no TEXT, bank_ifsc TEXT,
+        phone TEXT, email TEXT, pan TEXT, upi_id TEXT, signatory_name TEXT,
         updated_at INTEGER
       )
     ''');

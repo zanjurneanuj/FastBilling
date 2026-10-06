@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/IntroService.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/app_features.dart';
 
 class _Slide {
   const _Slide({required this.icon, required this.title, required this.body});
@@ -33,8 +34,11 @@ const _slides = [
   _Slide(
     icon: Icons.print_rounded,
     title: 'Print or share instantly',
-    body: 'Export polished PDFs, share them anywhere, or print straight '
-        'to a Bluetooth, USB, or WiFi receipt printer.',
+    body: AppFeatures.posPrinter
+        ? 'Export polished PDFs, share them anywhere, or print straight '
+            'to a Bluetooth, USB, or WiFi receipt printer.'
+        : 'Export polished GST PDFs and send them on WhatsApp with a '
+            'ready-made message in one tap.',
   ),
   _Slide(
     icon: Icons.card_giftcard_rounded,

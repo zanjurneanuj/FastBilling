@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../models/ClientItem.dart';
 import '../../utils/app_colors.dart';
+import '../../utils/plan_limits.dart';
 import '../../viewmodels/client_viewmodel.dart';
 import '../widgets/client_avatar.dart';
+import '../widgets/client_tax_fields.dart';
 import '../widgets/empty_state.dart';
 
 class ClientsView extends StatefulWidget {
@@ -173,7 +175,12 @@ class _ClientsViewState extends State<ClientsView>
 
           // ── FAB ───────────────────────────────────────────────────
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _showAddClientSheet(context, vm),
+            onPressed: () async {
+              if (await ensureCanAddClient(context, vm.clients.length) &&
+                  context.mounted) {
+                _showAddClientSheet(context, vm);
+              }
+            },
             backgroundColor: AppColors.primary,
             icon: const Icon(Icons.person_add_outlined,
                 color: Colors.white, size: 20),
@@ -193,6 +200,9 @@ class _ClientsViewState extends State<ClientsView>
     final emailCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final cityCtrl  = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final gstinCtrl = TextEditingController();
+    String? state;
     final formKey   = GlobalKey<FormState>();
     bool saving     = false;
 
@@ -208,6 +218,7 @@ class _ClientsViewState extends State<ClientsView>
               24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
           child: Form(
             key: formKey,
+            child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -269,6 +280,13 @@ class _ClientsViewState extends State<ClientsView>
                     decoration: const InputDecoration(
                         labelText: 'City · optional'),
                   ),
+                  const SizedBox(height: 14),
+                  ClientTaxFields(
+                    addressCtrl: addressCtrl,
+                    gstinCtrl: gstinCtrl,
+                    state: state,
+                    onStateChanged: (v) => setModalState(() => state = v),
+                  ),
                   const SizedBox(height: 22),
 
                   SizedBox(
@@ -285,6 +303,9 @@ class _ClientsViewState extends State<ClientsView>
                           email: emailCtrl.text.trim(),
                           phone: phoneCtrl.text.trim(),
                           city:  cityCtrl.text.trim(),
+                          address: addressCtrl.text.trim(),
+                          gstin: gstinCtrl.text.trim().toUpperCase(),
+                          state: state ?? '',
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
@@ -297,6 +318,7 @@ class _ClientsViewState extends State<ClientsView>
                     ),
                   ),
                 ]),
+            ),
           ),
         ),
       ),

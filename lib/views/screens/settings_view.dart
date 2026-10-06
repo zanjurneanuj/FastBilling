@@ -3,21 +3,21 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/locale_provider.dart';
+import '../../services/PaymentService.dart';
 import '../../services/PdfTemplateService.dart';
 import '../../services/PosPrinterService.dart';
 import '../../services/ProfileService.dart';
 import '../../services/SubscriptionService.dart';
 import '../../services/auth_service.dart';
-import '../../models/PdfTemplate.dart';
 import '../../utils/app_colors.dart';
 import '../../viewmodels/settings_viewmodel.dart';
-import 'PdfTemplateCard.dart';
 import 'PosPrinterConnectView.dart';
-import 'pdf_templates_page.dart';
+import '../../utils/app_features.dart';
 
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
@@ -121,12 +121,14 @@ class _SettingsViewState extends State<SettingsView>
                 initials:    _initials,
                 name:        _businessName,
                 sub:         _businessSub,
-                onEdit:      () => _showEditProfileDialog(context),
+                onEdit:      () => _openEditProfile(context),
               ),
               const SizedBox(height: 16),
 
               // ── Subscription usage ─────────────────────────────────
               _SubscriptionCard(onTap: () => context.push('/upgrade')),
+              const SizedBox(height: 12),
+              _ReferCard(onTap: () => context.push('/refer')),
               const SizedBox(height: 24),
 
               // ── Branding & Output ─────────────────────────────────
@@ -146,7 +148,7 @@ class _SettingsViewState extends State<SettingsView>
                   label: 'PDF template',
                   trailingText: PdfTemplateService.selected.name,
                   showChevron: true,
-                  onTap: () => _showPdfTemplateDialog(context),
+                  onTap: () => context.push('/settings/pdf-template'),
                 ),
                 _Divider(),
                 _SettingsTile(
@@ -156,20 +158,22 @@ class _SettingsViewState extends State<SettingsView>
                   showChevron: true,
                   onTap: () => _showCurrencyPicker(context),
                 ),
-                _Divider(),
-                _SettingsTile(
-                  icon: Icons.print_outlined,
-                  label: 'POS printer',
-                  subLabel: _printerSubtitle,
-                  subLabelColor: PosPrinterService.isConnected
-                      ? AppColors.success
-                      : AppColors.textSecondary(context),
-                  showChevron: true,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => const PosPrinterConnectView()),
+                if (AppFeatures.posPrinter) ...[
+                  _Divider(),
+                  _SettingsTile(
+                    icon: Icons.print_outlined,
+                    label: 'POS printer',
+                    subLabel: _printerSubtitle,
+                    subLabelColor: PosPrinterService.isConnected
+                        ? AppColors.success
+                        : AppColors.textSecondary(context),
+                    showChevron: true,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const PosPrinterConnectView()),
+                    ),
                   ),
-                ),
+                ],
               ]),
               const SizedBox(height: 20),
 
@@ -202,9 +206,12 @@ class _SettingsViewState extends State<SettingsView>
                 _SettingsTile(
                     icon: Icons.lock_outline_rounded,
                     label: 'App lock',
+                    subLabel: vm.appLock
+                        ? 'Fingerprint / PIN when you open the app'
+                        : 'Off',
                     trailing: Switch(
                       value: vm.appLock,
-                      onChanged: (v) => context.read<SettingsViewModel>().toggleAppLock(v),
+                      onChanged: (v) => _toggleAppLock(context, v),
                       activeColor: AppColors.primary,
                     )
                 ),
@@ -215,6 +222,26 @@ class _SettingsViewState extends State<SettingsView>
                   trailingText: localeProvider.current.label,
                   showChevron: true,
                   onTap: () => _showLanguagePicker(context, localeProvider),
+                ),
+              ]),
+              const SizedBox(height: 20),
+
+              // ── About ─────────────────────────────────────────────
+              _SectionLabel('ABOUT'),
+              const SizedBox(height: 8),
+              _SettingsCard(children: [
+                _SettingsTile(
+                  icon: Icons.gavel_rounded,
+                  label: 'Terms & Conditions',
+                  showChevron: true,
+                  onTap: () => context.push('/legal/terms'),
+                ),
+                _Divider(),
+                _SettingsTile(
+                  icon: Icons.privacy_tip_outlined,
+                  label: 'Privacy Policy',
+                  showChevron: true,
+                  onTap: () => context.push('/legal/privacy'),
                 ),
               ]),
               const SizedBox(height: 20),
@@ -360,7 +387,7 @@ class _SettingsViewState extends State<SettingsView>
                   color: AppColors.textSecondary(sheetContext), size: 18),
               onTap: () {
                 Navigator.pop(sheetContext);
-                _showPdfTemplateDialog(context);
+                context.push('/settings/pdf-template');
               },
             ),
           ],
@@ -494,113 +521,22 @@ class _SettingsViewState extends State<SettingsView>
     );
   }
 
-  void _showPdfTemplateDialog(BuildContext context) {
-    String selectedId = PdfTemplateService.selected.id;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface(context),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            24, 16, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SheetHandle(),
-              const SizedBox(height: 16),
-              Text('Choose PDF template',
-                  style: TextStyle(
-                      color: AppColors.textPrimary(sheetContext),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 19)),
-              const SizedBox(height: 4),
-              Text('Select a layout for all your invoices',
-                  style: TextStyle(
-                      color: AppColors.textSecondary(sheetContext),
-                      fontSize: 13)),
-              const SizedBox(height: 16),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: PdfTemplateCatalog.quickPick.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.95,
-                ),
-                itemBuilder: (_, i) {
-                  final t = PdfTemplateCatalog.quickPick[i];
-                  return PdfTemplateCard(
-                    template: t,
-                    isSelected: t.id == selectedId,
-                    onTap: () => setSheetState(() => selectedId = t.id),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const PdfTemplatesPage()),
-                    );
-                  },
-                  child: const Text('See more templates',
-                      style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () async {
-                    await PdfTemplateService.select(
-                        PdfTemplateCatalog.byId(selectedId));
-                    if (sheetContext.mounted) Navigator.pop(sheetContext);
-                  },
-                  child: const Text('Apply template',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<void> _openEditProfile(BuildContext context) async {
+    await context.push('/settings/profile');
+    if (mounted) setState(() {}); // refresh the header after saving
   }
 
-  void _showEditProfileDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _EditProfileDialog(
-        initialName:          ProfileService.cached?.name ?? '',
-        initialGst:           ProfileService.cached?.gstNumber ?? '',
-        initialState:         ProfileService.cached?.state ?? '',
-        initialAddress:       ProfileService.cached?.address ?? '',
-        initialBankName:      ProfileService.cached?.bankName ?? '',
-        initialBankAccountNo: ProfileService.cached?.bankAccountNo ?? '',
-        initialBankIfsc:      ProfileService.cached?.bankIfsc ?? '',
-        onSaved: () => setState(() {}), // refresh header once saved
-      ),
-    );
+  Future<void> _toggleAppLock(BuildContext context, bool value) async {
+    final err = await context.read<SettingsViewModel>().toggleAppLock(value);
+    // '' = the user cancelled the prompt; the switch just stays as it was.
+    if (!context.mounted || err == '') return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(err ??
+          (value
+              ? 'App Lock is on — unlock with fingerprint or phone PIN.'
+              : 'App Lock is off')),
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
   void _confirmSignOut(BuildContext context) {
@@ -648,7 +584,7 @@ class _SubscriptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPremium = SubscriptionService.isPremium;
     final used = SubscriptionService.invoiceCount;
-    final limit = SubscriptionService.freeInvoiceLimit;
+    final limit = SubscriptionService.invoiceLimit;
     final progress = isPremium ? 1.0 : (used / limit).clamp(0.0, 1.0);
 
     return GestureDetector(
@@ -683,23 +619,28 @@ class _SubscriptionCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    isPremium ? 'Premium plan' : 'Free plan',
+                    isPremium
+                        ? 'Premium · ${PaymentService.planById(SubscriptionService.planId)?.title ?? 'active'}'
+                        : (SubscriptionService.isExpired ? 'Premium ended' : 'Free plan'),
                     style: TextStyle(
                         color: AppColors.textPrimary(context),
                         fontSize: 14,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
-                if (!isPremium)
-                  Icon(Icons.chevron_right_rounded,
+                Icon(Icons.chevron_right_rounded,
                       color: AppColors.textSecondary(context), size: 18),
               ],
             ),
             const SizedBox(height: 12),
             Text(
               isPremium
-                  ? 'Unlimited invoices'
-                  : '$used of $limit free invoices used',
+                  ? (SubscriptionService.premiumUntil == null
+                      ? 'Unlimited invoices'
+                      : (SubscriptionService.daysLeft! <= 7
+                          ? 'Ends in ${SubscriptionService.daysLeft} day(s) — tap to renew'
+                          : 'Unlimited invoices · until ${DateFormat('d MMM yyyy').format(SubscriptionService.premiumUntil!)}'))
+                  : '$used of $limit free invoices used · see plans',
               style: TextStyle(
                   color: AppColors.textSecondary(context), fontSize: 12),
             ),
@@ -724,6 +665,61 @@ class _SubscriptionCard extends StatelessWidget {
   }
 }
 
+// ─── Refer & earn ─────────────────────────────────────────────────────────────
+
+class _ReferCard extends StatelessWidget {
+  const _ReferCard({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final friends = SubscriptionService.referralCount;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0F766E), Color(0xFF16A34A)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(Icons.card_giftcard_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Refer & earn',
+                    style: TextStyle(
+                        color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(
+                  friends == 0
+                      ? 'Invite a friend, get 10 free invoices'
+                      : '$friends friend${friends == 1 ? '' : 's'} joined · '
+                          '+${SubscriptionService.bonusInvoices} free invoices',
+                  style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white),
+        ]),
+      ),
+    );
+  }
+}
+
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.initials,
@@ -738,10 +734,15 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
+      color: AppColors.surface(context),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+      onTap: onEdit,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.surface(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border(context)),
       ),
@@ -779,215 +780,26 @@ class _ProfileCard extends StatelessWidget {
           ]),
         ),
 
-        // Edit icon
-        IconButton(
-          onPressed: onEdit,
-          icon: Icon(Icons.edit_outlined,
-              color: AppColors.textSecondary(context), size: 20),
+        // Edit affordance — the whole card opens Edit profile.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.edit_outlined, color: AppColors.primary, size: 14),
+            SizedBox(width: 4),
+            Text('Edit',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ]),
         ),
       ]),
-    );
-  }
-}
-
-// ─── Edit Profile Dialog ──────────────────────────────────────────────────────
-
-class _EditProfileDialog extends StatefulWidget {
-  const _EditProfileDialog({
-    required this.initialName,
-    required this.initialGst,
-    required this.initialState,
-    required this.initialAddress,
-    required this.initialBankName,
-    required this.initialBankAccountNo,
-    required this.initialBankIfsc,
-    required this.onSaved,
-  });
-
-  final String initialName;
-  final String initialGst;
-  final String initialState;
-  final String initialAddress;
-  final String initialBankName;
-  final String initialBankAccountNo;
-  final String initialBankIfsc;
-  final VoidCallback onSaved;
-
-  @override
-  State<_EditProfileDialog> createState() => _EditProfileDialogState();
-}
-
-class _EditProfileDialogState extends State<_EditProfileDialog> {
-  late final _nameCtrl          = TextEditingController(text: widget.initialName);
-  late final _gstCtrl           = TextEditingController(text: widget.initialGst);
-  late final _stateCtrl         = TextEditingController(text: widget.initialState);
-  late final _addressCtrl       = TextEditingController(text: widget.initialAddress);
-  late final _bankNameCtrl      = TextEditingController(text: widget.initialBankName);
-  late final _bankAccountNoCtrl = TextEditingController(text: widget.initialBankAccountNo);
-  late final _bankIfscCtrl      = TextEditingController(text: widget.initialBankIfsc);
-
-  final _formKey = GlobalKey<FormState>();
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _gstCtrl.dispose();
-    _stateCtrl.dispose();
-    _addressCtrl.dispose();
-    _bankNameCtrl.dispose();
-    _bankAccountNoCtrl.dispose();
-    _bankIfscCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _saving = true;
-      _error  = null;
-    });
-
-    try {
-      // ProfileService.save() rewrites the whole profile, so we carry over
-      // fields this dialog doesn't touch (currency, logo) from the cache.
-      await ProfileService.save(
-        name:      _nameCtrl.text.trim(),
-        address:   _addressCtrl.text.trim(),
-        gstNumber: _gstCtrl.text.trim().isEmpty ? null : _gstCtrl.text.trim(),
-        state:     _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
-        currency:  ProfileService.cached?.currency ?? 'INR',
-        bankName:      _bankNameCtrl.text.trim().isEmpty ? null : _bankNameCtrl.text.trim(),
-        bankAccountNo: _bankAccountNoCtrl.text.trim().isEmpty ? null : _bankAccountNoCtrl.text.trim(),
-        bankIfsc:      _bankIfscCtrl.text.trim().isEmpty ? null : _bankIfscCtrl.text.trim(),
-      );
-
-      if (!mounted) return;
-      widget.onSaved();
-      Navigator.pop(context);
-    } catch (e) {
-      setState(() => _error = 'Could not save changes. Please try again.');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.surface(context),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text('Edit profile',
-          style: TextStyle(
-              color: AppColors.textPrimary(context),
-              fontWeight: FontWeight.w700)),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextFormField(
-                controller: _nameCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'Business name',
-                ),
-                textCapitalization: TextCapitalization.words,
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _gstCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'GST number (optional)',
-                ),
-                textCapitalization: TextCapitalization.characters,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _stateCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'State (optional)',
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _addressCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'Address',
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              Text('Bank details (optional)',
-                  style: TextStyle(
-                      color: AppColors.textSecondary(context),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5)),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _bankNameCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'Bank name',
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _bankAccountNoCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'Account number',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _bankIfscCtrl,
-                style: TextStyle(color: AppColors.textPrimary(context)),
-                decoration: const InputDecoration(
-                  labelText: 'IFSC code',
-                ),
-                textCapitalization: TextCapitalization.characters,
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!,
-                    style: const TextStyle(color: AppColors.error, fontSize: 12)),
-              ],
-            ],
-          ),
-        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          child: Text('Cancel',
-              style: TextStyle(color: AppColors.textSecondary(context))),
-        ),
-        TextButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-            width: 16, height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-              : Text('Save',
-              style: TextStyle(
-                  color: AppColors.primary, fontWeight: FontWeight.w600)),
-        ),
-      ],
+      ),
     );
   }
 }

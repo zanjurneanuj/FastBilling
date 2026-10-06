@@ -2,6 +2,7 @@ import 'package:fast_billing/services/auth_service.dart';
 import 'package:fast_billing/services/IntroService.dart';
 import 'package:fast_billing/utils/go_router_refresh_stream.dart';
 import 'package:fast_billing/services/ProfileService.dart';
+import 'package:fast_billing/services/SessionService.dart';
 import 'package:fast_billing/views/screens/PdfTemplateView.dart';
 import 'package:fast_billing/views/screens/register_view.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +27,12 @@ import 'views/screens/catalog_view.dart';
 import 'views/screens/reports_view.dart';
 import 'views/screens/settings_view.dart';
 import 'views/screens/upgrade_view.dart';
+import 'views/screens/refer_view.dart';
+import 'views/screens/notifications_view.dart';
+import 'views/screens/welcome_view.dart';
+import 'views/screens/edit_profile_view.dart';
+import 'views/screens/legal_view.dart';
+import 'views/widgets/app_lock_gate.dart';
 
 class ZanvoyApp extends StatelessWidget {
   const ZanvoyApp({super.key});
@@ -55,6 +62,7 @@ class ZanvoyApp extends StatelessWidget {
       ],
 
       routerConfig: _router,
+      builder: (context, child) => AppLockGate(child: child!),
     );
   }
 
@@ -147,6 +155,34 @@ class ZanvoyApp extends StatelessWidget {
       ),
       dividerColor: border,
       iconTheme: IconThemeData(color: txtSec),
+      // Calendar dialogs: readable in both themes, brand-coloured header.
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        headerBackgroundColor: AppColors.primary,
+        headerForegroundColor: Colors.white,
+        dividerColor: border,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        weekdayStyle: TextStyle(color: txtSec, fontWeight: FontWeight.w600),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          if (states.contains(WidgetState.disabled)) return txtSec.withValues(alpha: 0.4);
+          return txtPri;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.primary : null),
+        todayForegroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? Colors.white : AppColors.primary),
+        todayBackgroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.primary : null),
+        todayBorder: const BorderSide(color: AppColors.primary),
+        yearForegroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? Colors.white : txtPri),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.primary : null),
+        cancelButtonStyle: TextButton.styleFrom(foregroundColor: txtSec),
+        confirmButtonStyle: TextButton.styleFrom(foregroundColor: AppColors.primary),
+      ),
     );
   }
 }
@@ -158,6 +194,7 @@ final GoRouter _router = GoRouter(
   refreshListenable: Listenable.merge([
     GoRouterRefreshStream(AuthService.authStateChanges),
     ProfileService.changed,
+    SessionService.changed,
   ]),
   errorBuilder: (context, state) => Scaffold(
     backgroundColor: AppColors.background(context),
@@ -193,13 +230,21 @@ final GoRouter _router = GoRouter(
       return loc == '/intro' ? null : '/intro';
     }
 
+    // Terms / Privacy are readable by anyone, e.g. from the sign-up screen.
+    if (loc.startsWith('/legal/')) return null;
+
     final loggedIn   = AuthService.isLoggedIn;
     final hasProfile = ProfileService.hasProfile;
     final onAuth = loc == '/login' || loc == '/register';
 
     if (!loggedIn) return onAuth ? null : '/login';
+    // Signed in but the profile is still loading — don't decide yet, or an
+    // existing user would be bounced to onboarding for a moment.
+    if (!SessionService.ready) return null;
     if (!hasProfile) return loc == '/onboarding' ? null : '/onboarding';
-    if (onAuth || loc == '/onboarding') return '/home';
+    if (onAuth || loc == '/onboarding') {
+      return IntroService.welcomePending ? '/welcome' : '/home';
+    }
     return null;
   },
   routes: [
@@ -208,7 +253,20 @@ final GoRouter _router = GoRouter(
     GoRoute(path: '/register', builder: (c, s) => const RegisterView()), 
     GoRoute(path: '/onboarding',      builder: (c, s) => const OnboardingView()),
     GoRoute(path: '/home',            builder: (c, s) => const HomeView()),
-    GoRoute(path: '/invoices',        builder: (c, s) => const InvoiceListView()),
+    GoRoute(
+      path: '/invoices',
+      // Opened from a dashboard tile / notification with ?filter=paid etc.
+      builder: (c, s) => InvoiceListView(
+        initialFilter: s.uri.queryParameters['filter'],
+        showBack: true,
+      ),
+    ),
+    GoRoute(path: '/notifications',   builder: (c, s) => const NotificationsView()),
+    GoRoute(path: '/welcome',         builder: (c, s) => const WelcomeView()),
+    GoRoute(
+      path: '/legal/:doc',              // /legal/terms, /legal/privacy
+      builder: (c, s) => LegalView(doc: LegalDoc.fromSlug(s.pathParameters['doc'])),
+    ),
     GoRoute(
       path: '/invoices/create',
       builder: (c, s) => InvoiceCreateView(editInvoiceId: s.extra as String?),
@@ -225,6 +283,7 @@ final GoRouter _router = GoRouter(
     GoRoute(path: '/catalog',         builder: (c, s) => const CatalogView()),
     GoRoute(path: '/reports',         builder: (c, s) => const ReportsView()),
     GoRoute(path: '/upgrade',         builder: (c, s) => const UpgradeView()),
+    GoRoute(path: '/refer',           builder: (c, s) => const ReferView()),
     GoRoute(
       path: '/settings',
       builder: (c, s) => const SettingsView(),
@@ -232,6 +291,10 @@ final GoRouter _router = GoRouter(
         GoRoute(
           path: 'pdf-template',              // no leading slash — it becomes /settings/pdf-template
           builder: (c, s) => const PdfTemplateView(),
+        ),
+        GoRoute(
+          path: 'profile',                   // /settings/profile
+          builder: (c, s) => const EditProfileView(),
         ),
       ],
     ),

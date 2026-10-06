@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../services/AppLockService.dart';
 import '../services/auth_service.dart';
 import '../services/ProfileService.dart';
 import '../services/local_db_service.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   static const _cloudBackupKey = 'settings_cloud_backup';
-  static const _appLockKey = 'settings_app_lock';
 
   SettingsViewModel() {
     _restore();
@@ -14,9 +14,7 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> _restore() async {
     final backup = await LocalDbService.instance.getSetting(_cloudBackupKey);
-    final lock = await LocalDbService.instance.getSetting(_appLockKey);
     if (backup != null) cloudBackup = backup == 'true';
-    if (lock != null) appLock = lock == 'true';
     notifyListeners();
   }
 
@@ -48,7 +46,9 @@ class SettingsViewModel extends ChangeNotifier {
 
   // ── Toggle state ──────────────────────────────────────────────────────────
   bool cloudBackup = true;
-  bool appLock     = false;
+
+  /// Owned by AppLockService, which actually enforces it.
+  bool get appLock => AppLockService.enabled;
 
   void toggleCloudBackup(bool v) {
     cloudBackup = v;
@@ -56,10 +56,12 @@ class SettingsViewModel extends ChangeNotifier {
     LocalDbService.instance.saveSetting(_cloudBackupKey, v.toString());
   }
 
-  void toggleAppLock(bool v) {
-    appLock = v;
+  /// Asks for fingerprint / PIN first. Returns null on success, or a
+  /// message to show ('' when the user just cancelled).
+  Future<String?> toggleAppLock(bool v) async {
+    final err = await AppLockService.setEnabled(v);
     notifyListeners();
-    LocalDbService.instance.saveSetting(_appLockKey, v.toString());
+    return err;
   }
 
   // ── Sign out ──────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/locale_provider.dart';
+import '../../services/NotificationService.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_strings.dart';
 import '../../utils/invoice_gate.dart';
@@ -73,98 +74,9 @@ class _HomeViewState extends State<HomeView> {
   }
 }
 
-// ─── Notifications sheet ────────────────────────────────────────────────────────
-
-void _showNotifications(
-    BuildContext context, DashboardStats stats, VoidCallback onViewInvoices) {
-  final items = <(IconData, Color, String, String)>[
-    if (stats.overdueCount > 0)
-      (
-        Icons.warning_amber_rounded,
-        AppColors.error,
-        '${stats.overdueCount} overdue invoice${stats.overdueCount > 1 ? 's' : ''}',
-        'Follow up with clients to get paid.',
-      ),
-    if (stats.pendingCount > 0)
-      (
-        Icons.hourglass_top_rounded,
-        AppColors.warning,
-        '${stats.pendingCount} invoice${stats.pendingCount > 1 ? 's' : ''} pending',
-        'Awaiting payment from clients.',
-      ),
-  ];
-
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: AppColors.surface(context),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (ctx) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Notifications',
-                style: TextStyle(
-                    color: AppColors.textPrimary(ctx),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            if (items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text("You're all caught up.",
-                    style: TextStyle(color: AppColors.textSecondary(ctx))),
-              )
-            else
-              ...items.map((it) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Row(children: [
-                  Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(
-                        color: it.$2.withValues(alpha: 0.12), shape: BoxShape.circle),
-                    child: Icon(it.$1, color: it.$2, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(it.$3,
-                            style: TextStyle(
-                                color: AppColors.textPrimary(ctx),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13)),
-                        Text(it.$4,
-                            style: TextStyle(
-                                color: AppColors.textSecondary(ctx),
-                                fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ]),
-              )),
-            if (items.isNotEmpty)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    onViewInvoices();
-                  },
-                  child: const Text('View invoices'),
-                ),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
+/// Opens the invoice list pre-filtered, e.g. from a dashboard tile.
+void _openInvoices(BuildContext context, String filter) =>
+    context.push('/invoices?filter=$filter');
 
 // ─── Bottom Nav ───────────────────────────────────────────────────────────────
 
@@ -239,65 +151,55 @@ class _DashboardTab extends StatelessWidget {
               // ── App Bar ───────────────────────────────────────────────────
               SliverAppBar(
                 backgroundColor: AppColors.surface(context),
-                floating: true,
-                snap: true,
+                surfaceTintColor: Colors.transparent,
+                pinned: true,
                 elevation: 0,
-                toolbarHeight: 64,
-                title: _AppBarTitle(vm: vm),
+                scrolledUnderElevation: 0.5,
+                toolbarHeight: 68,
+                titleSpacing: 16,
+                automaticallyImplyLeading: false,
+                title: _AppBarTitle(
+                  vm: vm,
+                  onAvatarTap: () => onNavigateTab(4),
+                ),
                 actions: [
-                  Stack(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.notifications_outlined,
-                            color: AppColors.textSecondary(context), size: 24),
-                        onPressed: () => _showNotifications(
-                            context, vm.stats, () => onNavigateTab(1)),
-                      ),
-                      if (vm.stats.overdueCount > 0)
-                        Positioned(
-                          right: 10, top: 10,
-                          child: Container(
-                            width: 8, height: 8,
-                            decoration: const BoxDecoration(
-                                color: AppColors.error, shape: BoxShape.circle),
-                          ),
-                        ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16, left: 4),
-                    child: GestureDetector(
-                      onTap: () => onNavigateTab(4),
-                      child: _AvatarCircle(name: vm.businessName),
-                    ),
-                  ),
+                  const _NotificationBell(),
+                  const SizedBox(width: 8),
                 ],
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Container(height: 1, color: AppColors.border(context)),
+                ),
+              ),
+
+              // ── Quick actions — always first, even while loading ──────────
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child: _QuickActions(onNavigateTab: onNavigateTab),
+                ),
               ),
 
               // ── Body ──────────────────────────────────────────────────────
               vm.isLoading
                   ? const SliverFillRemaining(child: DashboardSkeleton())
                   : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    _Greeting(vm: vm),
-                    const SizedBox(height: 20),
-                    _RevenueCard(stats: vm.stats),
-                    const SizedBox(height: 10),
-                    _StatsRow(stats: vm.stats),
-                    const SizedBox(height: 10),
-                    _StatsRow2(stats: vm.stats),
-                    const SizedBox(height: 24),
-                    _QuickActions(onNavigateTab: onNavigateTab),
-                    const SizedBox(height: 16),
                     if (vm.stats.overdueCount > 0) ...[
                       _OverdueBanner(
                         count: vm.stats.overdueCount,
-                        onTap: () => onNavigateTab(1),
+                        onTap: () => _openInvoices(context, 'overdue'),
                       ),
                       const SizedBox(height: 16),
                     ],
+                    _RevenueCard(stats: vm.stats),
+                    const SizedBox(height: 20),
+                    const _SectionHeader(title: 'Overview'),
+                    const SizedBox(height: 12),
+                    _StatsGrid(stats: vm.stats),
+                    const SizedBox(height: 24),
                     _SectionHeader(
                       title: 'Recent Invoices',
                       onSeeAll: () => onNavigateTab(1),
@@ -333,39 +235,102 @@ class _DashboardTab extends StatelessWidget {
 // ─── AppBar Title ─────────────────────────────────────────────────────────────
 
 class _AppBarTitle extends StatelessWidget {
-  const _AppBarTitle({required this.vm});
+  const _AppBarTitle({required this.vm, required this.onAvatarTap});
   final DashboardViewModel vm;
+  final VoidCallback onAvatarTap;
 
   @override
   Widget build(BuildContext context) {
-    final today = DateFormat('EEE, d MMM yyyy').format(DateTime.now());
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(today,
-            style: TextStyle(
-                color: AppColors.textSecondary(context),
-                fontSize: 11,
-                fontWeight: FontWeight.w400)),
-        const SizedBox(height: 2),
-        Row(children: [
-          Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(7)),
-            child: const Icon(Icons.receipt_long_rounded,
-                color: Colors.white, size: 14),
+    final today = DateFormat('EEE, d MMM').format(DateTime.now());
+    return Row(children: [
+      GestureDetector(
+        onTap: onAvatarTap,
+        child: _AvatarCircle(name: vm.businessName),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${vm.greeting} 👋 · $today',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: AppColors.textSecondary(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 2),
+            Text(vm.businessName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: AppColors.textPrimary(context),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18)),
+          ],
+        ),
+      ),
+    ]);
+  }
+}
+
+// ─── Notification bell ────────────────────────────────────────────────────────
+
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: NotificationService.changed,
+      builder: (context, _, _) {
+        final unread = NotificationService.unreadCount;
+        return Material(
+          color: AppColors.background(context),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => context.push('/notifications'),
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Stack(clipBehavior: Clip.none, children: [
+                Center(
+                  child: Icon(
+                      unread > 0
+                          ? Icons.notifications_active_outlined
+                          : Icons.notifications_none_rounded,
+                      color: AppColors.textPrimary(context),
+                      size: 23),
+                ),
+                if (unread > 0)
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      height: 18,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: AppColors.surface(context), width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(unread > 9 ? '9+' : '$unread',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1)),
+                    ),
+                  ),
+              ]),
+            ),
           ),
-          const SizedBox(width: 8),
-          Text('Fast Billing',
-              style: TextStyle(
-                  color: AppColors.textPrimary(context),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17)),
-        ]),
-      ],
+        );
+      },
     );
   }
 }
@@ -384,42 +349,17 @@ class _AvatarCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 34, height: 34,
-    decoration: const BoxDecoration(
-        color: AppColors.primary, shape: BoxShape.circle),
+    width: 42, height: 42,
+    decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(13)),
     child: Center(
       child: Text(_initials,
           style: const TextStyle(
               color: Colors.white,
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w700)),
     ),
-  );
-}
-
-// ─── Greeting ─────────────────────────────────────────────────────────────────
-
-class _Greeting extends StatelessWidget {
-  const _Greeting({required this.vm});
-  final DashboardViewModel vm;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(children: [
-        Text('${vm.greeting}, ',
-            style: TextStyle(
-                color: AppColors.textSecondary(context), fontSize: 14)),
-        const Text('👋', style: TextStyle(fontSize: 14)),
-      ]),
-      const SizedBox(height: 2),
-      Text(vm.businessName,
-          style: TextStyle(
-              color: AppColors.textPrimary(context),
-              fontSize: 22,
-              fontWeight: FontWeight.w700)),
-    ],
   );
 }
 
@@ -524,83 +464,73 @@ class _RevenueCard extends StatelessWidget {
   }
 }
 
-// ─── Stats rows ───────────────────────────────────────────────────────────────
+// ─── Overview grid ────────────────────────────────────────────────────────────
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.stats});
-  final DashboardStats stats;
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-    Expanded(
-      child: _StatTile(
-        label: 'Invoices sent',
-        value: '${stats.totalInvoices}',
-        sub: '${stats.pendingCount} awaiting payment',
-        subColor: AppColors.textSecondary(context),
-        icon: Icons.receipt_long_outlined,
-        iconColor: AppColors.primary,
-        iconBg: AppColors.primary.withValues(alpha: 0.1),
-      ),
-    ),
-    const SizedBox(width: 10),
-    Expanded(
-      child: _StatTile(
-        label: 'Paid',
-        value: '${stats.paidCount}',
-        sub: '₹${_fmt(stats.paid)} collected',
-        subColor: AppColors.textSecondary(context),
-        icon: Icons.check_circle_outline_rounded,
-        iconColor: AppColors.success,
-        iconBg: AppColors.success.withValues(alpha: 0.1),
-      ),
-    ),
-  ]);
-
-  String _fmt(double v) {
-    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return v.toStringAsFixed(0);
-  }
+String _fmtAmount(double v) {
+  if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
+  if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
+  return v.toStringAsFixed(0);
 }
 
-class _StatsRow2 extends StatelessWidget {
-  const _StatsRow2({required this.stats});
+/// The four headline numbers. Each tile opens the invoice list filtered to
+/// exactly the invoices it counts.
+class _StatsGrid extends StatelessWidget {
+  const _StatsGrid({required this.stats});
   final DashboardStats stats;
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-    Expanded(
-      child: _StatTile(
-        label: 'Outstanding',
-        value: '₹${_fmt(stats.unpaid)}',
-        sub: '${stats.pendingCount} invoices pending',
-        subColor: AppColors.textSecondary(context),
-        icon: Icons.hourglass_top_rounded,
-        iconColor: AppColors.warning,
-        iconBg: AppColors.warning.withValues(alpha: 0.1),
-        valueColor: AppColors.warning,
+  Widget build(BuildContext context) {
+    final unpaidCount = stats.pendingCount + stats.overdueCount;
+    final tiles = [
+      _StatTile(
+        label: 'Invoices sent',
+        value: '${stats.totalInvoices}',
+        sub: '$unpaidCount awaiting payment',
+        icon: Icons.send_rounded,
+        color: AppColors.primary,
+        onTap: () => _openInvoices(context, 'sent'),
       ),
-    ),
-    const SizedBox(width: 10),
-    Expanded(
-      child: _StatTile(
+      _StatTile(
+        label: 'Paid',
+        value: '${stats.paidCount}',
+        sub: '₹${_fmtAmount(stats.paid)} collected',
+        icon: Icons.check_circle_outline_rounded,
+        color: AppColors.success,
+        onTap: () => _openInvoices(context, 'paid'),
+      ),
+      _StatTile(
+        label: 'Outstanding',
+        value: '₹${_fmtAmount(stats.unpaid)}',
+        sub: '$unpaidCount unpaid invoice${unpaidCount == 1 ? '' : 's'}',
+        icon: Icons.hourglass_top_rounded,
+        color: AppColors.warning,
+        highlightValue: true,
+        onTap: () => _openInvoices(context, 'outstanding'),
+      ),
+      _StatTile(
         label: 'Overdue',
         value: '${stats.overdueCount}',
-        sub: 'Action needed',
-        subColor: AppColors.error,
+        sub: stats.overdueCount == 0 ? 'All on time' : 'Action needed',
         icon: Icons.warning_amber_rounded,
-        iconColor: AppColors.error,
-        iconBg: AppColors.error.withValues(alpha: 0.1),
-        valueColor: AppColors.error,
+        color: AppColors.error,
+        highlightValue: stats.overdueCount > 0,
+        onTap: () => _openInvoices(context, 'overdue'),
       ),
-    ),
-  ]);
+    ];
 
-  String _fmt(double v) {
-    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}k';
-    return v.toStringAsFixed(0);
+    return Column(children: [
+      Row(children: [
+        Expanded(child: tiles[0]),
+        const SizedBox(width: 10),
+        Expanded(child: tiles[1]),
+      ]),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(child: tiles[2]),
+        const SizedBox(width: 10),
+        Expanded(child: tiles[3]),
+      ]),
+    ]);
   }
 }
 
@@ -609,58 +539,74 @@ class _StatTile extends StatelessWidget {
     required this.label,
     required this.value,
     required this.sub,
-    required this.subColor,
     required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    this.valueColor,
+    required this.color,
+    required this.onTap,
+    this.highlightValue = false,
   });
 
-  final String   label;
-  final String   value;
-  final String   sub;
-  final Color    subColor;
-  final IconData icon;
-  final Color    iconColor;
-  final Color    iconBg;
-  final Color?   valueColor;
+  final String       label;
+  final String       value;
+  final String       sub;
+  final IconData     icon;
+  final Color        color;
+  final VoidCallback onTap;
+  final bool         highlightValue;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.surface(context),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.border(context)),
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label,
-            style: TextStyle(
-                color: AppColors.textSecondary(context),
-                fontSize: 12,
-                fontWeight: FontWeight.w500)),
-        Container(
-          width: 28, height: 28,
-          decoration:
-          BoxDecoration(color: iconBg, shape: BoxShape.circle),
-          child: Icon(icon, color: iconColor, size: 15),
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surface(context),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border(context)),
         ),
-      ]),
-      const SizedBox(height: 8),
-      Text(value,
-          style: TextStyle(
-              color: valueColor ?? AppColors.textPrimary(context),
-              fontSize: 22,
-              fontWeight: FontWeight.w700)),
-      const SizedBox(height: 2),
-      Text(sub, style: TextStyle(color: subColor, fontSize: 11)),
-    ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: color, size: 17),
+            ),
+            const Spacer(),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 12, color: AppColors.textHint(context)),
+          ]),
+          const SizedBox(height: 12),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: highlightValue ? color : AppColors.textPrimary(context),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: TextStyle(
+                  color: AppColors.textPrimary(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(sub,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 11.5)),
+        ]),
+      ),
+    ),
   );
 }
 
 // ─── Quick Actions ────────────────────────────────────────────────────────────
 
+/// Pinned to the top of the dashboard: the things people do every day.
 class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.onNavigateTab});
   final ValueChanged<int> onNavigateTab;
@@ -670,35 +616,82 @@ class _QuickActions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Quick actions',
-            style: TextStyle(
-                color: AppColors.textPrimary(context),
-                fontSize: 16,
-                fontWeight: FontWeight.w600)),
-        const SizedBox(height: 12),
-        Row(children: [
-          _QACard(
-            icon: Icons.add,
-            label: 'New\nInvoice',
-            filled: true,
-            onTap: () => openNewInvoice(context),
+        // Primary action — full width, impossible to miss.
+        Material(
+          color: Colors.transparent,
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.30),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5)),
+              ],
+            ),
+            child: InkWell(
+              onTap: () => openNewInvoice(context),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Create new invoice',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                        SizedBox(height: 2),
+                        Text('GST-ready PDF in under a minute',
+                            style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                ]),
+              ),
+            ),
           ),
-          const SizedBox(width: 10),
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
           _QACard(
             icon: Icons.people_outline_rounded,
             label: 'Clients',
+            color: const Color(0xFF0EA5E9),
             onTap: () => onNavigateTab(2),
           ),
           const SizedBox(width: 10),
           _QACard(
             icon: Icons.inventory_2_outlined,
             label: 'Items',
+            color: const Color(0xFFF59E0B),
             onTap: () => context.push('/catalog'),
+          ),
+          const SizedBox(width: 10),
+          _QACard(
+            icon: Icons.receipt_long_outlined,
+            label: 'Invoices',
+            color: AppColors.primary,
+            onTap: () => onNavigateTab(1),
           ),
           const SizedBox(width: 10),
           _QACard(
             icon: Icons.bar_chart_rounded,
             label: 'Reports',
+            color: AppColors.success,
             onTap: () => onNavigateTab(3),
           ),
         ]),
@@ -711,58 +704,45 @@ class _QACard extends StatelessWidget {
   const _QACard({
     required this.icon,
     required this.label,
+    required this.color,
     required this.onTap,
-    this.filled = false,
   });
   final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback onTap;
-  final bool filled;
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: Container(
-      decoration: BoxDecoration(
+    child: Material(
+      color: AppColors.surface(context),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: filled
-            ? [
-          BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
-        ]
-            : null,
-      ),
-      child: Material(
-        color: filled ? AppColors.primary : AppColors.surface(context),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: filled
-                  ? null
-                  : Border.all(color: AppColors.border(context)),
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon,
-                  size: 22,
-                  color: filled ? Colors.white : AppColors.primary),
-              const SizedBox(height: 6),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                      color: filled
-                          ? Colors.white
-                          : AppColors.textPrimary(context))),
-            ]),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border(context)),
           ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, size: 19, color: color),
+            ),
+            const SizedBox(height: 6),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary(context))),
+          ]),
         ),
       ),
     ),

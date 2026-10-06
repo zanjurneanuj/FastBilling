@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_auth
   firebase_core
   firebase_storage
+  local_auth_windows
   printing
   share_plus
   unified_esc_pos_printer

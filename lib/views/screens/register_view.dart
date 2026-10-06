@@ -234,7 +234,24 @@ class _RegisterViewState extends State<RegisterView> {
                             : const Text('Create Account'),
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 14),
+
+                    // Consent
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('By creating an account you agree to our ',
+                            style: TextStyle(
+                                color: AppColors.textSecondary(context), fontSize: 12)),
+                        _LegalLink('Terms & Conditions', '/legal/terms'),
+                        Text(' and ',
+                            style: TextStyle(
+                                color: AppColors.textSecondary(context), fontSize: 12)),
+                        _LegalLink('Privacy Policy', '/legal/privacy'),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
 
                     // Already have account
                     Center(
@@ -277,4 +294,19 @@ class _Label extends StatelessWidget {
   Widget build(BuildContext context) => Text(text,
       style: const TextStyle(color: AppColors.primary,
           fontSize: 13, fontWeight: FontWeight.w500));
+}
+class _LegalLink extends StatelessWidget {
+  const _LegalLink(this.label, this.route);
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: () => context.push(route),
+        child: Text(label,
+            style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      );
 }

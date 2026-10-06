@@ -48,11 +48,15 @@ class PosReceiptLine {
   final double qty;
   final double rate;
 
+  /// Line amount after any discount; defaults to qty × rate.
+  final double? amount;
+
   const PosReceiptLine({
     required this.name,
     required this.qty,
     required this.rate,
+    this.amount,
   });
 
-  double get total => qty * rate;
+  double get total => amount ?? qty * rate;
 }

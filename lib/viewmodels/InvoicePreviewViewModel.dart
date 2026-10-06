@@ -7,6 +7,8 @@ import '../models/InvoiceDetail.dart';
 import '../models/PdfTemplate.dart';
 import '../services/PdfTemplateService.dart';
 import '../services/ProfileService.dart';
+import '../services/SubscriptionService.dart';
+import '../utils/invoice_events.dart';
 import '../utils/invoice_status.dart';
 
 class InvoicePreviewViewModel extends ChangeNotifier {
@@ -17,6 +19,8 @@ class InvoicePreviewViewModel extends ChangeNotifier {
 
   InvoicePreviewViewModel() {
     PdfTemplateService.changed.addListener(_onTemplateChanged);
+    // Premium loading/expiring changes which template is effective.
+    SubscriptionService.changed.addListener(_onTemplateChanged);
   }
 
   void _onTemplateChanged() {
@@ -27,6 +31,7 @@ class InvoicePreviewViewModel extends ChangeNotifier {
   @override
   void dispose() {
     PdfTemplateService.changed.removeListener(_onTemplateChanged);
+    SubscriptionService.changed.removeListener(_onTemplateChanged);
     super.dispose();
   }
 
@@ -61,23 +66,17 @@ class InvoicePreviewViewModel extends ChangeNotifier {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         final dueDate = (data['dueDate'] as Timestamp?)?.toDate();
-        final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
-        final profile = ProfileService.cached;
+        final issuedAt = (data['invoiceDate'] as Timestamp?)?.toDate() ??
+            (data['createdAt'] as Timestamp?)?.toDate();
 
         final normalizedStatus = InvoiceStatus.normalize(
             data['status'] as String?, dueDate);
 
         invoice = InvoiceDetail.fromMap(
           {'id': invoiceId, ...data, 'status': normalizedStatus},
-          senderName: profile?.name ?? '',
-          senderAddress: profile?.address ?? '',
-          senderGst: profile?.gstNumber,
-          senderState: profile?.state,
-          senderBankName: profile?.bankName,
-          senderBankAccountNo: profile?.bankAccountNo,
-          senderBankIfsc: profile?.bankIfsc,
+          profile: ProfileService.cached,
           issuedDate: DateFormat('d MMM yyyy')
-              .format(createdAt ?? dueDate ?? DateTime.now()),
+              .format(issuedAt ?? dueDate ?? DateTime.now()),
           dueDate: dueDate,
         );
       } else {
@@ -93,7 +92,7 @@ class InvoicePreviewViewModel extends ChangeNotifier {
   }
 
   /// Exposes the currently active template so the view can read it.
-  PdfTemplate get activeTemplate => PdfTemplateService.selected;
+  PdfTemplate get activeTemplate => PdfTemplateService.effective;
 
   Future<void> togglePaidStatus() async {
     final inv = invoice;
@@ -121,6 +120,7 @@ class InvoicePreviewViewModel extends ChangeNotifier {
             ? FieldValue.serverTimestamp()
             : FieldValue.delete(),
       });
+      InvoiceEvents.notify();
     } catch (e) {
       // Roll back on failure.
       invoice = inv;
@@ -139,6 +139,7 @@ class InvoicePreviewViewModel extends ChangeNotifier {
 
     try {
       await ref.delete();
+      InvoiceEvents.notify();
       return true;
     } catch (e) {
       errorMsg = 'Could not delete this invoice. Please try again.';
@@ -163,24 +164,35 @@ class InvoicePreviewViewModel extends ChangeNotifier {
           .collection('invoices')
           .doc(newId);
 
+      final now = DateTime.now();
       await newRef.set({
         'invoiceNumber': newId,
-        'dueDate': Timestamp.fromDate(
-            DateTime.now().add(const Duration(days: 30))),
+        'invoiceDate': Timestamp.fromDate(now),
+        'dueDate': Timestamp.fromDate(now.add(const Duration(days: 30))),
+        'poNumber': inv.poNumber ?? '',
         'clientId': inv.clientId,
         'clientName': inv.clientName,
         'clientEmail': inv.clientEmail,
-        'items': inv.items
-            .map((i) => {'name': i.name, 'qty': i.qty, 'rate': i.rate, 'total': i.total})
-            .toList(),
+        'clientPhone': inv.clientPhone ?? '',
+        'clientAddress': inv.clientAddress ?? '',
+        'clientGstin': inv.clientGstin ?? '',
+        'clientState': inv.clientState ?? '',
+        'items': inv.items.map((i) => i.toMap()).toList(),
         'gstPercent': inv.gstPercent,
         'discountAmt': inv.discountAmt,
+        'otherCharges': inv.otherCharges,
+        // A fresh copy hasn't been paid yet.
+        'amountPaid': 0,
+        'paymentMode': inv.paymentMode,
+        'note': inv.note ?? '',
+        'terms': inv.terms ?? '',
         'subtotal': inv.subtotal,
         'gstAmt': inv.gstAmt,
         'grandTotal': inv.grandTotal,
         'status': InvoiceStatus.draft,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      InvoiceEvents.notify();
       return newId;
     } catch (e) {
       errorMsg = 'Could not duplicate this invoice. Please try again.';

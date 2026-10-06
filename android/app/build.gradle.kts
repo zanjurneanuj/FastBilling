@@ -45,3 +45,9 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // AppCompat themes (values/styles.xml) — required by local_auth's
+    // biometric prompt on Android 8 and below.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+}

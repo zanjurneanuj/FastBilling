@@ -10,6 +10,11 @@ class BusinessProfile {
   final String? bankName;
   final String? bankAccountNo;
   final String? bankIfsc;
+  final String? phone;
+  final String? email;
+  final String? pan;
+  final String? upiId;         // printed as a scan-to-pay QR on invoices
+  final String? signatoryName; // printed above "Authorised Signatory"
   final int updatedAt;
 
   const BusinessProfile({
@@ -24,6 +29,11 @@ class BusinessProfile {
     this.bankName,
     this.bankAccountNo,
     this.bankIfsc,
+    this.phone,
+    this.email,
+    this.pan,
+    this.upiId,
+    this.signatoryName,
     required this.updatedAt,
   });
 
@@ -39,6 +49,11 @@ class BusinessProfile {
     'bank_name': bankName,
     'bank_account_no': bankAccountNo,
     'bank_ifsc': bankIfsc,
+    'phone': phone,
+    'email': email,
+    'pan': pan,
+    'upi_id': upiId,
+    'signatory_name': signatoryName,
     'updated_at': updatedAt,
   };
 
@@ -54,6 +69,11 @@ class BusinessProfile {
     'bank_name': bankName,
     'bank_account_no': bankAccountNo,
     'bank_ifsc': bankIfsc,
+    'phone': phone,
+    'email': email,
+    'pan': pan,
+    'upi_id': upiId,
+    'signatory_name': signatoryName,
     'updated_at': updatedAt,
   };
 
@@ -69,6 +89,11 @@ class BusinessProfile {
     bankName: m['bank_name'] as String?,
     bankAccountNo: m['bank_account_no'] as String?,
     bankIfsc: m['bank_ifsc'] as String?,
+    phone: m['phone'] as String?,
+    email: m['email'] as String?,
+    pan: m['pan'] as String?,
+    upiId: m['upi_id'] as String?,
+    signatoryName: m['signatory_name'] as String?,
     updatedAt: (m['updated_at'] as int?) ?? 0,
   );
 }

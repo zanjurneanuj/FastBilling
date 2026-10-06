@@ -5,10 +5,23 @@ import 'package:intl/intl.dart';
 
 import '../models/InvoiceListItem.dart';
 import '../utils/invoice_status.dart';
+import '../utils/invoice_events.dart';
 
 enum InvoiceSort { newest, oldest, amountAsc, amountDesc }
 
 class InvoiceListViewModel extends ChangeNotifier {
+  InvoiceListViewModel({String? initialFilter}) {
+    final match = filters.where((f) => f.toLowerCase() == initialFilter?.toLowerCase());
+    if (match.isNotEmpty) selectedFilter = match.first;
+    InvoiceEvents.changed.addListener(loadInvoices);
+  }
+
+  @override
+  void dispose() {
+    InvoiceEvents.changed.removeListener(loadInvoices);
+    super.dispose();
+  }
+
   List<InvoiceListItem> invoices = [];
   bool isLoading = false;
   String? errorMessage;
@@ -17,13 +30,25 @@ class InvoiceListViewModel extends ChangeNotifier {
   String searchQuery = '';
   InvoiceSort sort = InvoiceSort.newest;
 
+  /// Chip filters. They line up with the dashboard tiles, so a tile's
+  /// count always matches the list it opens:
+  ///   Sent        — every issued invoice (anything but a draft)
+  ///   Outstanding — issued and not yet paid, including overdue
   static const List<String> filters = [
     'All',
     'Draft',
     'Sent',
     'Paid',
+    'Outstanding',
     'Overdue',
   ];
+
+  static bool _matches(String filter, String status) => switch (filter) {
+        'All' => true,
+        'Sent' => status != InvoiceStatus.draft,
+        'Outstanding' => status == InvoiceStatus.sent || status == InvoiceStatus.overdue,
+        _ => status == filter.toLowerCase(),
+      };
 
   Future<void> loadInvoices() async {
     isLoading = true;
@@ -92,8 +117,7 @@ class InvoiceListViewModel extends ChangeNotifier {
   List<InvoiceListItem> get filteredInvoices {
     final query = searchQuery.trim().toLowerCase();
     var list = invoices.where((invoice) {
-      final matchesFilter =
-          selectedFilter == 'All' || invoice.status == selectedFilter.toLowerCase();
+      final matchesFilter = _matches(selectedFilter, invoice.status);
       final matchesSearch = query.isEmpty ||
           invoice.clientName.toLowerCase().contains(query) ||
           invoice.invoiceNumber.toLowerCase().contains(query);

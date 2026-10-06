@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../services/NotificationService.dart';
 import '../services/ProfileService.dart';
 import '../services/auth_service.dart';
 import '../utils/invoice_stats.dart';
 import '../utils/invoice_status.dart';
+import '../utils/invoice_events.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +64,7 @@ class DashboardViewModel extends ChangeNotifier {
     // Listening here keeps the dashboard's business name live without
     // needing a manual refresh.
     ProfileService.changed.addListener(_onProfileChanged);
+    InvoiceEvents.changed.addListener(loadDashboard);
   }
 
   final _firestore = FirebaseFirestore.instance;
@@ -112,6 +115,9 @@ class DashboardViewModel extends ChangeNotifier {
           .collection('invoices')
           .orderBy('createdAt', descending: true)
           .get();
+
+      // Same query feeds the notifications badge — no second read.
+      await NotificationService.updateFromInvoices(snapshot.docs);
 
       final now = DateTime.now();
       final docsData = snapshot.docs.map((d) => d.data()).toList();
@@ -175,6 +181,7 @@ class DashboardViewModel extends ChangeNotifier {
   @override
   void dispose() {
     ProfileService.changed.removeListener(_onProfileChanged);
+    InvoiceEvents.changed.removeListener(loadDashboard);
     super.dispose();
   }
 }

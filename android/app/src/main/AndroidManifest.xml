@@ -13,6 +13,8 @@
     <!-- Wi-Fi thermal printer discovery: reading our own IP to find the
          subnet to scan, plus raw TCP sockets to probe port 9100. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- App Lock: fingerprint / face unlock -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 

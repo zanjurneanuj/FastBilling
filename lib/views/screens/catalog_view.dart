@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../utils/app_colors.dart';
+import '../../utils/plan_limits.dart';
 import '../../viewmodels/catalog_viewmodel.dart';
 import '../widgets/empty_state.dart';
+import 'item_edit_view.dart';
 
 class CatalogView extends StatelessWidget {
   const CatalogView({super.key});
@@ -43,7 +45,12 @@ class _CatalogBody extends StatelessWidget {
       ),
       body: _buildBody(context, vm),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddProductSheet(context, vm),
+        onPressed: () async {
+          if (await ensureCanAddItem(context, vm.products.length) &&
+              context.mounted) {
+            openSavedItemEditor(context, catalog: vm);
+          }
+        },
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Add item',
@@ -95,100 +102,6 @@ class _CatalogBody extends StatelessWidget {
       ),
     );
   }
-
-  void _showAddProductSheet(BuildContext context, CatalogViewModel vm) {
-    final nameController = TextEditingController();
-    final priceController = TextEditingController();
-    final stockController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface(context),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            24, 16, 24,
-            MediaQuery.of(sheetContext).viewInsets.bottom + 32,
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: AppColors.border(sheetContext),
-                        borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text('New Product',
-                    style: TextStyle(
-                        color: AppColors.textPrimary(sheetContext),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18)),
-                const SizedBox(height: 18),
-                TextFormField(
-                  controller: nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Product name *'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Name is required'
-                      : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: priceController,
-                  decoration: const InputDecoration(labelText: 'Price *'),
-                  keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Price is required';
-                    if (double.tryParse(v) == null) return 'Enter a valid number';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: stockController,
-                  decoration: const InputDecoration(labelText: 'Stock'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 22),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      if (!formKey.currentState!.validate()) return;
-                      vm.addProduct(
-                        Product(
-                          id: '',
-                          name: nameController.text.trim(),
-                          price: double.parse(priceController.text.trim()),
-                          stock: int.tryParse(stockController.text.trim()) ?? 0,
-                        ),
-                      );
-                      Navigator.of(sheetContext).pop();
-                    },
-                    child: const Text('Add product'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _ProductRow extends StatelessWidget {
@@ -198,7 +111,10 @@ class _ProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return InkWell(
+      onTap: () => openSavedItemEditor(context, product: product, catalog: vm),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surface(context),
@@ -216,7 +132,12 @@ class _ProductRow extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         fontSize: 14)),
                 const SizedBox(height: 3),
-                Text('₹${product.price.toStringAsFixed(2)}',
+                Text([
+                  '₹${product.price.toStringAsFixed(2)} / ${product.unit}',
+                  if (product.gstPercent != null)
+                    'GST ${product.gstPercent!.toStringAsFixed(0)}%${product.taxInclusive ? ' incl.' : ''}',
+                  if (product.hsnCode.isNotEmpty) 'HSN ${product.hsnCode}',
+                ].join(' · '),
                     style: TextStyle(
                         color: AppColors.textSecondary(context), fontSize: 12)),
               ]),
@@ -231,6 +152,7 @@ class _ProductRow extends StatelessWidget {
           onPressed: () => vm.removeProduct(product.id),
         ),
       ]),
+      ),
     );
   }
 }

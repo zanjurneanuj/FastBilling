@@ -53,8 +53,20 @@ class ProfileService {
     String? bankName,
     String? bankAccountNo,
     String? bankIfsc,
+    // For these, null keeps the current value and '' clears it, so callers
+    // that only change one thing (logo, currency) don't need to pass them.
+    String? phone,
+    String? email,
+    String? pan,
+    String? upiId,
+    String? signatoryName,
   }) async {
     final uid = AuthService.currentUser!.uid;
+    String? keep(String? v, String? current) {
+      if (v == null) return current;
+      final t = v.trim();
+      return t.isEmpty ? null : t;
+    }
 
     String? logoPath = _cached?.logoPath;
     String? logoUrl  = _cached?.logoUrl;
@@ -76,6 +88,11 @@ class ProfileService {
       bankName: (bankName?.isEmpty ?? true) ? null : bankName,
       bankAccountNo: (bankAccountNo?.isEmpty ?? true) ? null : bankAccountNo,
       bankIfsc: (bankIfsc?.isEmpty ?? true) ? null : bankIfsc,
+      phone: keep(phone, _cached?.phone),
+      email: keep(email, _cached?.email),
+      pan: keep(pan, _cached?.pan),
+      upiId: keep(upiId, _cached?.upiId),
+      signatoryName: keep(signatoryName, _cached?.signatoryName),
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
 
@@ -99,7 +116,8 @@ class ProfileService {
 
   static Future<String> _uploadLogo(String uid, File f) async {
     final ref = FirebaseStorage.instance.ref('business_logos/$uid');
-    await ref.putFile(f);
+    final ext = f.path.split('.').last.toLowerCase();
+    await ref.putFile(f, SettableMetadata(contentType: ext == 'png' ? 'image/png' : 'image/jpeg'));
     return ref.getDownloadURL();
   }
 }
